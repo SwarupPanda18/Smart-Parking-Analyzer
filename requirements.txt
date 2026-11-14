@@ -16,10 +16,12 @@ httpx>=0.27.0
 supabase>=2.3.0
 psycopg2-binary>=2.9.9
 
-# Deep Learning & Computer Vision
+# Deep Learning & Computer Vision (ONNX Optimized for Cloud & Low Memory)
 numpy>=1.24.0,<2.3.0
 pillow>=10.0.0
 opencv-python-headless>=4.8.0
+onnx>=1.15.0
+onnxruntime>=1.17.0
 torch>=2.0.0
 torchvision>=0.15.0
 ultralytics>=8.1.0

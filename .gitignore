@@ -76,6 +76,8 @@ subset_dataset/
 vehicle and license plate.v3i.yolov8/
 weights/
 *.onnx
+!yolov8n.onnx
+!license_plate_detector.onnx
 *.engine
 # Ignore intermediate training checkpoints while keeping production weights
 last.pt

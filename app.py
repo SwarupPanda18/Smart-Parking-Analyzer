@@ -26,8 +26,15 @@ from ultralytics import YOLO
 import cv2
 import numpy as np
 import torch
-from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+import gc
 from PIL import Image
+
+# Conserve CPU threads & memory for Render 512MB RAM cap
+torch.set_grad_enabled(False)
+try:
+    torch.set_num_threads(1)
+except Exception:
+    pass
 
 app = FastAPI(
     title="Mother's Hut Traffic & Gate Operations Console",
@@ -50,38 +57,75 @@ if device_env in ["cpu", "cuda"]:
     device = torch.device(device_env)
 else:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Loading models on {device}...")
+print(f"Target compute device: {device} (threads constrained for low-memory cloud tiers)")
 
-vehicle_model = YOLO("yolov8n.pt") 
+# Prefer ONNX models for ultra-lightweight memory footprint (Render 512MB RAM cap)
+VEHICLE_ONNX = "yolov8n.onnx"
+PLATE_ONNX = "license_plate_detector.onnx"
+
+vehicle_model_path = VEHICLE_ONNX if os.path.exists(VEHICLE_ONNX) else "yolov8n.pt"
+print(f"Loading vehicle detection model from {vehicle_model_path}...")
+vehicle_model = YOLO(vehicle_model_path, task="detect")
+
+plate_model_path = PLATE_ONNX if os.path.exists(PLATE_ONNX) else "license_plate_detector.pt"
 try:
-    plate_model = YOLO("license_plate_detector.pt") 
+    if os.path.exists(plate_model_path):
+        print(f"Loading license plate model from {plate_model_path}...")
+        plate_model = YOLO(plate_model_path, task="detect")
+    else:
+        plate_model = None
 except Exception as e:
-    print(f"WARNING: Custom plate model not found. {e}")
+    print(f"WARNING: Plate model failed to load ({plate_model_path}): {e}")
     plate_model = None
 
-# Load Microsoft TrOCR (runs locally from cache)
-processor = TrOCRProcessor.from_pretrained("microsoft/trocr-small-printed")
-trocr_model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-small-printed").to(device)
+# TrOCR lazy-loading (saves >280MB RAM on startup for low-memory cloud tiers like Render)
+processor = None
+trocr_model = None
 
-# Load EasyOCR free open-source image-to-text neural engine (CRAFT + BiLSTM-CTC)
-import easyocr
+def get_trocr_model():
+    """Lazy-loads Microsoft TrOCR model on demand only if needed."""
+    global processor, trocr_model
+    if trocr_model is False:
+        return None, None
+    if trocr_model is None:
+        try:
+            print("Lazy-loading TrOCR model...")
+            from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+            processor = TrOCRProcessor.from_pretrained("microsoft/trocr-small-printed")
+            trocr_model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-small-printed").to(device)
+            print("TrOCR loaded successfully.")
+        except Exception as e:
+            print(f"Notice: TrOCR omitted to conserve RAM ({e})")
+            trocr_model = False
+            processor = None
+    return processor, trocr_model
 
+# EasyOCR lazy-loading (prevents memory spike during server boot)
 easyocr_model_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "easyocr")
 os.makedirs(easyocr_model_dir, exist_ok=True)
-try:
-    print(f"Loading EasyOCR free image-to-text neural engine on {device}...")
-    has_local_weights = os.path.exists(os.path.join(easyocr_model_dir, "craft_mlt_25k.pth"))
-    easyocr_reader = easyocr.Reader(
-        ['en'],
-        gpu=(device.type == "cuda"),
-        model_storage_directory=easyocr_model_dir,
-        user_network_directory=easyocr_model_dir,
-        download_enabled=not has_local_weights
-    )
-    print("EasyOCR free model brain initialized successfully!")
-except Exception as e:
-    print(f"WARNING: EasyOCR initialization error: {e}")
-    easyocr_reader = None
+easyocr_reader = None
+
+def get_easyocr_reader():
+    """Lazy-loads EasyOCR engine on first inference request to keep server boot memory under 200MB."""
+    global easyocr_reader
+    if easyocr_reader is None:
+        try:
+            import easyocr
+            print(f"Initializing EasyOCR neural engine on {device} (storage: {easyocr_model_dir})...")
+            has_local_weights = os.path.exists(os.path.join(easyocr_model_dir, "craft_mlt_25k.pth"))
+            easyocr_reader = easyocr.Reader(
+                ['en'],
+                gpu=(device.type == "cuda"),
+                model_storage_directory=easyocr_model_dir,
+                user_network_directory=easyocr_model_dir,
+                download_enabled=not has_local_weights
+            )
+            print("EasyOCR free model brain initialized successfully!")
+            gc.collect()
+        except Exception as e:
+            print(f"WARNING: EasyOCR initialization error: {e}")
+            easyocr_reader = False
+    return easyocr_reader if easyocr_reader is not False else None
 
 # Comprehensive Indian State & Union Territory Codes Mapping
 INDIAN_STATES = {
@@ -292,12 +336,15 @@ def ocr_single_crop(crop_img):
     """Runs TrOCR on a single image slice."""
     if crop_img is None or crop_img.size == 0 or crop_img.shape[0] < 5 or crop_img.shape[1] < 5:
         return ""
+    proc, mdl = get_trocr_model()
+    if not proc or not mdl:
+        return ""
     rgb = cv2.cvtColor(crop_img, cv2.COLOR_BGR2RGB)
     pil_img = Image.fromarray(rgb)
-    pixel_values = processor(pil_img, return_tensors="pt").pixel_values.to(device)
+    pixel_values = proc(pil_img, return_tensors="pt").pixel_values.to(device)
     with torch.no_grad():
-        generated_ids = trocr_model.generate(pixel_values, max_new_tokens=15)
-    return processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        generated_ids = mdl.generate(pixel_values, max_new_tokens=15)
+    return proc.batch_decode(generated_ids, skip_special_tokens=True)[0]
 
 
 def ocr_with_easyocr(crop_img):
@@ -306,7 +353,8 @@ def ocr_with_easyocr(crop_img):
     Handles single-line and two-line multi-layer plates automatically with CRAFT character detection.
     Returns list of candidate text strings.
     """
-    if easyocr_reader is None or crop_img is None or crop_img.size == 0:
+    reader = get_easyocr_reader()
+    if reader is None or crop_img is None or crop_img.size == 0:
         return []
         
     try:
@@ -319,7 +367,7 @@ def ocr_with_easyocr(crop_img):
             scale = 56.0 / h
             scaled_crop = cv2.resize(crop_img, (int(w * scale), 56), interpolation=cv2.INTER_CUBIC)
             
-        results = easyocr_reader.readtext(scaled_crop, detail=1, paragraph=False)
+        results = reader.readtext(scaled_crop, detail=1, paragraph=False)
         if not results:
             return []
             
@@ -509,25 +557,27 @@ def recognize_plate_multi_layout(plate_crop, use_ollama=False):
                 return parsed_ol
 
     # --- PHASE 3: TrOCR Fallback (Only if EasyOCR found zero text) ---
-    if not best_parsed and trocr_model is not None:
-        if aspect_ratio < 2.45:
-            # Two-line bike plate slicing for TrOCR
-            vh, vw = plate_crop.shape[:2]
-            split_y = vh // 2
-            top_slice = plate_crop[0:split_y, :]
-            bot_slice = plate_crop[split_y:vh, :]
-            t_top = ocr_single_crop(top_slice)
-            t_bot = ocr_single_crop(bot_slice)
-            if t_top or t_bot:
-                t_comb = f"{t_top} {t_bot}".strip()
-                parsed_tr = parse_and_validate_plate(t_comb)
+    if not best_parsed:
+        _, mdl = get_trocr_model()
+        if mdl is not None:
+            if aspect_ratio < 2.45:
+                # Two-line bike plate slicing for TrOCR
+                vh, vw = plate_crop.shape[:2]
+                split_y = vh // 2
+                top_slice = plate_crop[0:split_y, :]
+                bot_slice = plate_crop[split_y:vh, :]
+                t_top = ocr_single_crop(top_slice)
+                t_bot = ocr_single_crop(bot_slice)
+                if t_top or t_bot:
+                    t_comb = f"{t_top} {t_bot}".strip()
+                    parsed_tr = parse_and_validate_plate(t_comb)
+                    if parsed_tr:
+                        return parsed_tr
+            t_full = ocr_single_crop(plate_crop)
+            if t_full:
+                parsed_tr = parse_and_validate_plate(t_full)
                 if parsed_tr:
                     return parsed_tr
-        t_full = ocr_single_crop(plate_crop)
-        if t_full:
-            parsed_tr = parse_and_validate_plate(t_full)
-            if parsed_tr:
-                return parsed_tr
 
     return None
 
@@ -773,10 +823,10 @@ def health_check():
         "database": db_status,
         "timestamp": datetime.now().isoformat(),
         "models": {
-            "vehicle_detector": "YOLOv8n (Local)",
-            "license_plate_detector": "Custom YOLOv8 (Local)",
-            "ocr_image_to_text": "EasyOCR (CRAFT + BiLSTM-CTC)",
-            "ocr_transformer": "Microsoft TrOCR (Local Offline)",
+            "vehicle_detector": f"YOLOv8n ({vehicle_model_path})",
+            "license_plate_detector": f"Custom YOLOv8 ({plate_model_path})" if plate_model else "Not loaded",
+            "ocr_image_to_text": "EasyOCR (CRAFT + BiLSTM-CTC, Lazy-loaded)",
+            "ocr_transformer": "Microsoft TrOCR (Lazy-loaded)",
             "ollama_vision": {
                 "installed": ol_avail,
                 "model": ol_model or "None (llava:latest ready)",
@@ -1219,6 +1269,7 @@ def analyze_parking(
                     os.remove(p)
                 except OSError:
                     pass
+        gc.collect()
 
 
 if __name__ == "__main__":
