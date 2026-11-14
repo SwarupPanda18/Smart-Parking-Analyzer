@@ -1,0 +1,131 @@
+# ====================================================================
+# MOTHER'S HUT SMART TRAFFIC & GATE OPERATIONS CONSOLE
+# PRODUCTION .GITIGNORE
+# ====================================================================
+
+# --------------------------------------------------------------------
+# 1. Environment Secrets & API Credentials (CRITICAL - NEVER COMMIT)
+# --------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+!.env.example
+
+# --------------------------------------------------------------------
+# 2. Virtual Environments
+# --------------------------------------------------------------------
+smart/
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+bin/
+lib/
+include/
+
+# --------------------------------------------------------------------
+# 3. Python Bytecode, Compilations & Caches
+# --------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+*.pyo
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# --------------------------------------------------------------------
+# 4. Local Databases & SQLite Storage
+# --------------------------------------------------------------------
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# --------------------------------------------------------------------
+# 5. Heavy Datasets & Model Training Checkpoints
+# --------------------------------------------------------------------
+runs/
+subset_dataset/
+vehicle and license plate.v3i.yolov8/
+weights/
+*.onnx
+*.engine
+# Ignore intermediate training checkpoints while keeping production weights
+last.pt
+epoch*.pt
+
+# --------------------------------------------------------------------
+# 6. Temporary Surveillance Captures, Videos & Uploads
+# --------------------------------------------------------------------
+uploads/
+temp_*
+*_out.mp4
+*_alt.*
+*.tmp
+*.mp4
+*.webm
+*.avi
+*.mov
+*.mkv
+*.3gp
+# Ignore root/temp captures but preserve static assets & UI icons
+*.jpg
+*.jpeg
+*.png
+!static/**
+!mobile/**
+!website_integration/**
+
+# --------------------------------------------------------------------
+# 7. Operating System & IDE Cache Files
+# --------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# --------------------------------------------------------------------
+# 8. Logs & Agent Scratch Directories
+# --------------------------------------------------------------------
+*.log
+logs/
+.system_generated/
+.gemini/

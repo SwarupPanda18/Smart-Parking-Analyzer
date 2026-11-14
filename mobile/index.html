@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Mother's Hut | Mobile Gate Operations</title>
+  <meta name="description" content="Mobile Field Terminal for vehicle surveillance and automated license plate recognition.">
+  <link rel="stylesheet" href="./css/mobile.css">
+  <link rel="stylesheet" href="/mobile/css/mobile.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230284c7'><path d='M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z'/></svg>">
+</head>
+<body>
+
+  <!-- Mobile Top Header -->
+  <header class="mobile-header">
+    <div class="brand-wrap">
+      <div class="brand-badge">MH</div>
+      <div class="brand-titles">
+        <h1>Mother's Hut</h1>
+        <div class="subtitle">Mobile Field Operations</div>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <button class="btn-pill-small" id="themeToggleMobile" title="Switch Theme">☀️ Light</button>
+      <a href="/" class="btn-pill-small" title="Switch to Full Desktop Console">💻 PC</a>
+    </div>
+  </header>
+
+  <!-- Network & Telemetry Status Strip -->
+  <div class="mobile-status-strip">
+    <div class="status-indicator">
+      <span class="status-dot" id="healthDot"></span>
+      <span id="healthLabel">CONNECTING...</span>
+    </div>
+    <div>Hardware: <strong id="hardwareBadge">CPU</strong></div>
+    <div>Engine: <strong style="color: var(--status-ok);">100% Free / Local (Ollama Ready)</strong></div>
+  </div>
+
+  <!-- Main Mobile Content Area -->
+  <main class="mobile-main">
+
+    <!-- TAB 1: LIVE CAMERA VIEWPORT (Default) -->
+    <section class="tab-content active" id="tab-camera">
+
+      <!-- Live Video Feed Viewport Card -->
+      <div class="camera-card">
+        <div class="camera-header-bar">
+          <div class="lens-indicator">
+            <span class="lens-dot"></span>
+            <span id="lensIndicatorText">LIVE REAR CAMERA FEED</span>
+          </div>
+          <button class="btn-pill-small" id="btnFlipCam" title="Switch between Back and Front Camera">🔄 Flip</button>
+        </div>
+
+        <div class="camera-viewport">
+          <video id="mobileLiveVideo" autoplay playsinline muted></video>
+
+          <!-- Scanning Overlay Reticle -->
+          <div class="scanner-overlay" id="scannerOverlay" style="display: none;">
+            <div class="scanner-corners"></div>
+            <div class="scanner-hud-tag">ALPR LIVE TRACKER · BACK LENS</div>
+          </div>
+
+          <!-- Inactive Placeholder -->
+          <div class="camera-placeholder" id="cameraPlaceholder">
+            <div class="placeholder-icon">📹</div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-main);">Live Camera Feed Ready</div>
+            <div style="font-size: 11px; max-width: 240px;">Tap below to initialize your mobile device's back camera.</div>
+            <button class="btn-mobile btn-mobile-primary" id="btnToggleLiveCam" style="margin-top: 6px; width: 85%;">
+              ▶ Start Live Camera
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Stream Controls -->
+        <div class="camera-actions-grid">
+          <button class="btn-mobile btn-mobile-primary" id="btnLiveScanToggle" disabled>
+            ⚡ Auto-Scan Stream: OFF
+          </button>
+          <button class="btn-mobile" id="btnSnapLiveFrame" disabled>
+            📸 Snap Frame
+          </button>
+          <button class="btn-mobile btn-mobile-record" id="btnRecordClip" disabled>
+            🎥 Record Live Clip (5s)
+          </button>
+        </div>
+      </div>
+
+      <!-- Native Mobile Hardware Camera Triggers -->
+      <div class="native-shutter-card">
+        <div class="section-label">
+          <span>📲 Native Hardware Camera Actions</span>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+          Directly launches your phone's native camera app using the rear lens with full resolution and stability:
+        </p>
+        <div class="native-buttons-row">
+          <label class="btn-hardware-trigger" for="mobileVideoRecordInput">
+            <div>
+              <span>🎥 Record Video with Back Camera</span>
+              <span class="sub">Records high-frame video of moving vehicles for temporal tracking</span>
+            </div>
+            <span class="icon">➔</span>
+          </label>
+          <input type="file" id="mobileVideoRecordInput" class="visually-hidden" accept="video/*" capture="environment">
+
+          <label class="btn-hardware-trigger" for="mobilePhotoInput">
+            <div>
+              <span>📸 Snap Photo with Back Camera</span>
+              <span class="sub">High-resolution single vehicle plate capture</span>
+            </div>
+            <span class="icon">➔</span>
+          </label>
+          <input type="file" id="mobilePhotoInput" class="visually-hidden" accept="image/*" capture="environment">
+        </div>
+      </div>
+
+      <!-- HTTP Notice / Guidance (Shown if WebRTC is restricted on non-HTTPS origins) -->
+      <div id="httpCameraNotice" class="alert-card-mobile" style="display: none; border-left-color: var(--status-warn); margin-bottom: 12px;">
+        <div class="alert-head" style="color: var(--status-warn);">ℹ️ Mobile Camera Connectivity</div>
+        <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+          If your mobile browser restricts WebRTC live streaming on local HTTP, use the <strong>Native Hardware Camera</strong> buttons above to record video clips or photos directly with the back camera!
+        </div>
+      </div>
+
+      <!-- Inference Output Card -->
+      <div class="result-card" id="resultCard" style="display: none;">
+        <div class="result-card-header">
+          <span class="result-title">Latest Model Inference</span>
+          <span class="btn-pill-small" id="resultInfoTag" style="font-family: var(--font-mono);">0ms</span>
+        </div>
+        <div class="result-media-wrap" id="resultMediaWrap">
+          <!-- Dynamic Media Image / Video -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- TAB 2: OPERATIONS & ALERTS -->
+    <section class="tab-content" id="tab-alerts">
+      
+      <!-- Metrics Overview -->
+      <div class="mobile-metrics-row">
+        <div class="metric-pill">
+          <div class="metric-num" id="mTotalVehicles">0</div>
+          <div class="metric-lbl">Total Vehicles</div>
+        </div>
+        <div class="metric-pill">
+          <div class="metric-num" id="mTotalCars" style="color: #38bdf8;">0</div>
+          <div class="metric-lbl">Cars / Trucks</div>
+        </div>
+        <div class="metric-pill">
+          <div class="metric-num" id="mTotalBuses" style="color: #f59e0b;">0</div>
+          <div class="metric-lbl">Buses</div>
+        </div>
+      </div>
+
+      <!-- Directives -->
+      <div class="section-label">Operational Directives</div>
+
+      <div class="alert-card-mobile" id="mKitchenCard">
+        <div class="alert-head">
+          <span>Kitchen Prep Cadence</span>
+          <span class="badge">DINING</span>
+        </div>
+        <div class="alert-body" id="mKitchenAlert">Normal dining prep cadence</div>
+      </div>
+
+      <div class="alert-card-mobile">
+        <div class="alert-head">
+          <span>Floor Manager Directive</span>
+          <span class="badge">FLOOR</span>
+        </div>
+        <div class="alert-body" id="mFloorAlert">Standard floor coverage</div>
+      </div>
+
+      <!-- Model Parameters -->
+      <div class="native-shutter-card" style="margin-top: 14px;">
+        <div class="section-label">Detection Confidence</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+          <span>Threshold:</span>
+          <strong id="confValueLabel" style="font-family: var(--font-mono); color: var(--accent-primary);">0.40</strong>
+        </div>
+        <input type="range" id="confSliderMobile" min="0.10" max="0.90" step="0.05" value="0.40" style="width: 100%;" oninput="document.getElementById('confValueLabel').textContent = parseFloat(this.value).toFixed(2);">
+      </div>
+
+    </section>
+
+    <!-- TAB 3: LICENSE PLATE LEDGER -->
+    <section class="tab-content" id="tab-ledger">
+      
+      <div class="ledger-header-mobile">
+        <input type="text" id="searchPlatesMobile" class="search-input-mobile" placeholder="Search plate or state...">
+        <select id="mobileDateSelect" style="max-width: 95px; background: rgba(18,24,38,0.9); color: #38bdf8; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; font-size: 11px; padding: 6px 4px; font-family: monospace;">
+          <option value="today">Today</option>
+          <option value="all">All Dates</option>
+        </select>
+        <button class="btn-pill-small" id="btnExportCsvMobile" title="Export CSV from SQLite Database">📥 CSV</button>
+      </div>
+      <div style="font-size: 10px; color: #34d399; margin: 4px 14px 10px; text-align: right; opacity: 0.85;">
+        💾 Auto-archived to Supabase
+      </div>
+
+      <div class="plate-list-mobile" id="mobilePlateList">
+        <div style="text-align:center; padding: 28px; color: var(--text-muted); font-size:12px;">
+          No vehicles logged yet. Scan vehicles via the Camera tab.
+        </div>
+      </div>
+
+    </section>
+
+    <!-- TAB 4: FILE UPLOAD -->
+    <section class="tab-content" id="tab-upload">
+      
+      <div class="mobile-upload-box">
+        <div class="mobile-upload-icon">📂</div>
+        <div style="font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 4px;">Choose Media File</div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 14px;">Select surveillance video or photos from device storage</p>
+        
+        <label class="btn-mobile btn-mobile-primary" for="fileUploadInput" style="display: inline-flex; width: auto; padding: 10px 20px;">
+          Select File
+        </label>
+        <input type="file" id="fileUploadInput" class="visually-hidden" accept="image/*,video/mp4,video/avi,video/quicktime,video/webm">
+      </div>
+
+      <div class="native-shutter-card">
+        <div class="section-label">Supported Surveillance Formats</div>
+        <ul style="font-size: 11px; color: var(--text-muted); padding-left: 18px; line-height: 1.6;">
+          <li>Video: MP4, WebM, AVI, MOV (Includes vehicle tracking &amp; temporal consensus)</li>
+          <li>Still Images: JPG, JPEG, PNG</li>
+          <li>Multi-Vehicle State Registration Parsing (e.g. WB, BH, DL, MH)</li>
+        </ul>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Mobile Bottom Navigation Bar -->
+  <nav class="mobile-bottom-nav">
+    <button class="nav-tab-btn active" data-tab="camera">
+      <span class="nav-icon">📷</span>
+      <span>Camera</span>
+    </button>
+    <button class="nav-tab-btn" data-tab="alerts">
+      <span class="nav-icon">📊</span>
+      <span>Operations</span>
+    </button>
+    <button class="nav-tab-btn" data-tab="ledger">
+      <span class="nav-icon">📋</span>
+      <span>Ledger</span>
+    </button>
+    <button class="nav-tab-btn" data-tab="upload">
+      <span class="nav-icon">📁</span>
+      <span>Upload</span>
+    </button>
+  </nav>
+
+  <!-- Animated Processing Circle & Status Overlay -->
+  <div id="processingModal" class="processing-modal-backdrop" style="display: none;">
+    <div class="processing-modal-card">
+      <div class="processing-circle-container">
+        <svg class="processing-circle-svg" viewBox="0 0 100 100">
+          <circle class="circle-bg" cx="50" cy="50" r="42"></circle>
+          <circle class="circle-spinner" cx="50" cy="50" r="42" id="processingCircleSpinner"></circle>
+        </svg>
+        <div class="processing-circle-inner-icon" id="processingInnerIcon">⚡</div>
+      </div>
+      
+      <div class="processing-title" id="processingTitle">ANALYZING MEDIA</div>
+      <div class="processing-status" id="processingStatus">Uploading media to neural server...</div>
+      
+      <div class="processing-timer-strip">
+        <span class="timer-dot" id="processingTimerDot"></span>
+        <span id="processingTimer">00:00s elapsed</span>
+        <span class="processing-badge-active" id="processingServerBadge">SERVER ACTIVE</span>
+      </div>
+      
+      <div class="processing-reassurance" id="processingReassurance">
+        Please wait. Your file has been received and local models are processing frame-by-frame.
+      </div>
+
+      <!-- Error State Card (hidden by default) -->
+      <div class="processing-error-box" id="processingErrorBox" style="display: none;">
+        <div class="error-msg" id="processingErrorMessage">Analysis encountered an error.</div>
+        <button class="btn-dismiss-error" id="btnDismissError">✕ Dismiss &amp; Try Again</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Toast Notification -->
+  <div class="mobile-toast" id="mobileToast">Notification</div>
+
+  <!-- Scripts -->
+  <script src="./js/mobile.js"></script>
+  <script src="/mobile/js/mobile.js"></script>
+</body>
+</html>

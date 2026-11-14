@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mother's Hut | Traffic & Gate Monitoring System</title>
+  <meta name="description" content="Vehicle detection, traffic telemetry, and automated number plate recognition console.">
+  <link rel="stylesheet" href="./css/styles.css">
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230284c7'><path d='M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z'/></svg>">
+</head>
+<body>
+
+  <!-- Top Application Bar -->
+  <header class="app-header">
+    <div class="brand-section">
+      <div class="brand-logo-badge">MH</div>
+      <div class="brand-text">
+        <h1>Mother's Hut — Gate Operations</h1>
+        <div class="brand-subtitle">Traffic Telemetry &amp; License Plate Recognition</div>
+      </div>
+    </div>
+
+    <div class="header-telemetry">
+      <div class="telemetry-chip">
+        <span class="pulse-dot" id="healthStatusDot"></span>
+        <span>Service: <strong id="healthStatusText">CONNECTING...</strong></span>
+      </div>
+      <div class="telemetry-chip">
+        <span>Hardware: <strong id="deviceBadge">CPU</strong></span>
+      </div>
+      <div class="telemetry-chip">
+        <span>Engine: <strong style="color:var(--status-ok);">100% Free / Local (Ollama Ready)</strong></span>
+      </div>
+      <div class="telemetry-chip">
+        <span>Station Clock: <strong id="clockDisplay">--:--:--</strong></span>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <a href="/mobile" class="btn-icon" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; font-size:12px;" title="Switch to Mobile Console">📱 Mobile View</a>
+      <button class="btn-icon" id="themeToggleBtn" title="Toggle Display Theme">☀️ Light</button>
+    </div>
+  </header>
+
+  <!-- 3-Zone Workspace -->
+  <main class="app-container">
+
+    <!-- ZONE 1: Ingest & Operational Directives (Left Rail) -->
+    <aside class="panel panel-controls">
+      
+      <!-- Ingest Controller Card -->
+      <section class="card">
+        <div class="card-title">
+          <span>Surveillance Ingest</span>
+          <span class="badge">FEED 01</span>
+        </div>
+
+        <!-- Ingest Mode Tabs -->
+        <div class="ingest-tabs">
+          <button class="ingest-tab-btn active" id="tabUploadBtn">File Ingest</button>
+          <button class="ingest-tab-btn" id="tabSamplesBtn">Demo Samples</button>
+          <button class="ingest-tab-btn" id="tabWebcamBtn">Camera</button>
+        </div>
+
+        <!-- Mode A: File Upload Dropzone -->
+        <div id="uploadContainer">
+          <div class="dropzone" id="dropzone">
+            <div class="dropzone-icon">⤓</div>
+            <div class="dropzone-text">Drop surveillance image or video here</div>
+            <div class="dropzone-hint">Supports MP4, AVI, MOV, JPG, PNG</div>
+            <input type="file" id="fileInput" class="file-input-hidden" accept="image/*,video/mp4,video/avi,video/quicktime">
+          </div>
+
+          <!-- Staged File Status Card -->
+          <div class="staged-file-card" id="stagedFileCard">
+            <div class="file-type-icon">📄</div>
+            <div class="file-details">
+              <div class="file-name" id="stagedFileName">sample.jpg</div>
+              <div class="file-size" id="stagedFileSize">0 KB</div>
+            </div>
+            <button class="btn-remove-file" id="btnRemoveFile" title="Remove staged file">✕</button>
+          </div>
+        </div>
+
+        <!-- Mode B: Quick Test Samples -->
+        <div class="samples-container" id="samplesContainer">
+          <div id="samplesList">
+            <!-- Dynamically populated or fallback -->
+          </div>
+        </div>
+
+        <!-- Mode C: Hardware Camera / Mobile Back Camera -->
+        <div class="webcam-container" id="webcamContainer">
+          <div class="camera-lens-badge" id="cameraLensBadge">📷 BACK CAMERA (ENVIRONMENT)</div>
+          <video id="webcamVideo" class="webcam-preview" autoplay playsinline muted></video>
+          
+          <div class="camera-controls-row">
+            <button class="btn-secondary" id="btnToggleWebcam">Connect Camera</button>
+            <button class="btn-secondary" id="btnSwitchCamera" title="Switch Between Back & Front Camera">🔄 Flip Camera</button>
+            <button class="btn-secondary btn-capture" id="btnCaptureWebcam" disabled>📸 Capture</button>
+          </div>
+
+          <!-- Direct Mobile Native Back Camera Shutter -->
+          <div class="mobile-native-camera-box">
+            <div class="mobile-cam-divider"><span>OR MOBILE SHUTTER</span></div>
+            <label class="btn-mobile-snap" for="mobileCameraInput">
+              <span>📷 Take Photo with Back Camera</span>
+            </label>
+            <input type="file" id="mobileCameraInput" accept="image/*" capture="environment" class="file-input-hidden">
+            <div class="mobile-hint">Direct rear camera capture • Zero setup required</div>
+          </div>
+        </div>
+
+        <!-- Confidence Slider -->
+        <div class="control-row">
+          <div class="slider-label-row">
+            <span>Detection Sensitivity</span>
+            <strong id="confValue">40%</strong>
+          </div>
+          <input type="range" id="confSlider" class="range-slider" min="0.15" max="0.85" step="0.05" value="0.40">
+        </div>
+
+        <!-- Primary Action -->
+        <button class="btn-primary" id="btnProcess" disabled>
+          <span>▶ Run Analysis</span>
+        </button>
+      </section>
+
+      <!-- Operational Directives & Dispatch Card -->
+      <section class="card">
+        <div class="card-title">
+          <span>Operational Directives</span>
+          <span class="badge">DISPATCH</span>
+        </div>
+
+        <div class="alert-card normal" id="alertKitchen">
+          <div class="alert-header">
+            <span>🍳</span>
+            <span>Kitchen Batch Staging</span>
+          </div>
+          <div class="alert-body" id="alertKitchenText">
+            Standard Prep Cadence
+          </div>
+        </div>
+
+        <div class="alert-card normal" id="alertFloor">
+          <div class="alert-header">
+            <span>👥</span>
+            <span>Dining Floor Staffing</span>
+          </div>
+          <div class="alert-body" id="alertFloorText">
+            Standard Floor Coverage
+          </div>
+        </div>
+
+        <!-- Facility Occupancy Indicator -->
+        <div class="capacity-meter">
+          <div class="capacity-meta">
+            <span>Parking Lot Utilization</span>
+            <strong id="capacityText">0% Occupancy</strong>
+          </div>
+          <div class="capacity-track">
+            <div class="capacity-fill" id="capacityFill"></div>
+          </div>
+        </div>
+      </section>
+
+    </aside>
+
+    <!-- ZONE 2: Telemetry Counters & Visual Viewport (Center) -->
+    <section class="panel panel-viewport">
+
+      <!-- 4 Key Telemetry Cards -->
+      <div class="telemetry-grid">
+        <div class="stat-card accent-sky">
+          <div class="stat-value" id="statTotalVehicles">0</div>
+          <div class="stat-label">Total In-Frame</div>
+        </div>
+        <div class="stat-card accent-emerald">
+          <div class="stat-value" id="statLightVehicles">0</div>
+          <div class="stat-label">Light Vehicles</div>
+        </div>
+        <div class="stat-card accent-amber">
+          <div class="stat-value" id="statHeavyBuses">0</div>
+          <div class="stat-label">Buses &amp; Coaches</div>
+        </div>
+        <div class="stat-card accent-rose">
+          <div class="stat-value" id="statPlatesCount">0</div>
+          <div class="stat-label">Plates Logged</div>
+        </div>
+      </div>
+
+      <!-- Main Surveillance Stage -->
+      <div class="card viewport-card">
+        <div class="viewport-toolbar">
+          <div class="viewport-title-group">
+            <span class="feed-live-tag">MONITOR</span>
+            <strong style="font-size: 0.85rem; letter-spacing: 0.05em;">GATE-01 // LIVE INFERENCE FEED</strong>
+          </div>
+          <div class="viewport-controls">
+            <button class="btn-icon" id="btnZoomIn" title="Zoom In">+</button>
+            <button class="btn-icon" id="btnZoomOut" title="Zoom Out">−</button>
+            <button class="btn-icon" id="btnZoomReset" title="Reset Zoom">Reset</button>
+            <button class="btn-icon" id="btnDownloadMedia" title="Download Annotated Media" disabled>⬇ Export Media</button>
+            <button class="btn-icon" id="btnFullscreen" title="Toggle Fullscreen">⛶</button>
+          </div>
+        </div>
+
+        <!-- Canvas Container -->
+        <div class="viewport-canvas-container" id="viewportContainer">
+          
+          <!-- Idle Empty State -->
+          <div class="viewport-empty" id="viewportEmpty">
+            <div class="reticle-box">⊙</div>
+            <h3>Feed Ready for Analysis</h3>
+            <p>Upload a gate camera capture or select a test sample to initiate detection and recognition.</p>
+          </div>
+
+          <!-- Annotated Output Elements -->
+          <img id="viewportImg" class="viewport-media" alt="Annotated Feed">
+          <video id="viewportVideo" class="viewport-video" controls playsinline></video>
+
+          <!-- Scanning Overlay -->
+          <div class="scanner-overlay" id="scannerOverlay">
+            <div class="processing-circle-container">
+              <svg class="processing-circle-svg" viewBox="0 0 100 100">
+                <circle class="circle-bg" cx="50" cy="50" r="42"></circle>
+                <circle class="circle-spinner" cx="50" cy="50" r="42" id="scannerCircleSpinner"></circle>
+              </svg>
+              <div class="processing-circle-inner-icon" id="scannerInnerIcon">⚡</div>
+            </div>
+            <div class="scanner-title" id="scannerTitle">ANALYZING MEDIA</div>
+            <div class="scanner-status" id="scannerStatus">Executing vehicle detection and plate recognition...</div>
+            <div class="processing-timer-strip">
+              <span class="timer-dot" id="scannerTimerDot"></span>
+              <span class="scanner-elapsed" id="scannerElapsed">00:00s elapsed</span>
+              <span class="processing-badge-active" id="scannerServerBadge">SERVER ACTIVE</span>
+            </div>
+            <div class="scanner-reassurance" id="scannerReassurance">
+              Please wait. File received and local models are processing frame-by-frame.
+            </div>
+            <div class="processing-error-box" id="scannerErrorBox" style="display: none; max-width: 320px;">
+              <div class="error-msg" id="scannerErrorMessage">Analysis error details.</div>
+              <button class="btn-dismiss-error" id="btnDismissScannerError">✕ Dismiss</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Telemetry Footer Bar -->
+        <div class="viewport-footer">
+          <span id="viewportMetaInfo">Awaiting media ingest...</span>
+          <span>Security Protocol 8.4</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ZONE 3: License Plate Ledger & Registry (Right Rail) -->
+    <aside class="panel panel-ledger">
+      <section class="card">
+        <div class="card-title">
+          <span>License Plate Ledger</span>
+          <span class="badge" id="ledgerCountBadge">0 LOGGED</span>
+        </div>
+
+        <!-- Search & Date Filter Bar -->
+        <div class="ledger-search-bar" style="display: flex; gap: 8px; align-items: center;">
+          <input type="text" id="plateSearchInput" class="input-search" placeholder="Filter plate registration..." style="flex: 1;">
+          <select id="ledgerDateSelect" class="input-select" style="max-width: 130px; background: rgba(18, 24, 38, 0.9); color: #38bdf8; border: 1px solid rgba(255,255,255,0.18); border-radius: 6px; padding: 6px 8px; font-size: 0.8rem; font-family: monospace; outline: none; cursor: pointer;">
+            <option value="today">Today (Live)</option>
+            <option value="all">All Dates</option>
+          </select>
+        </div>
+
+        <!-- Scrollable Cards List -->
+        <div class="ledger-list" id="ledgerList">
+          <div class="ledger-empty">
+            <div class="ledger-empty-icon">📋</div>
+            <div>Awaiting detections. Recognized license plates will appear here with verification status.</div>
+          </div>
+        </div>
+
+        <!-- Ledger Footer Actions -->
+        <div class="ledger-footer-actions">
+          <button class="btn-secondary" id="btnExportCsv" title="Export CSV for selected date from SQLite database">
+            <span>⤓ Export CSV Log</span>
+          </button>
+          <button class="btn-secondary" id="btnCopyAllPlates">
+            <span>Copy All</span>
+          </button>
+        </div>
+        <div style="font-size: 0.72rem; color: #34d399; margin-top: 6px; text-align: center; opacity: 0.85;">
+          💾 Auto-archived to Supabase Database (Available anytime)
+        </div>
+      </section>
+    </aside>
+
+  </main>
+
+  <!-- Bottom Audit Drawer -->
+  <footer class="audit-drawer">
+    <div class="audit-log-line">
+      <span class="audit-log-time" id="auditLogTime">[--:--:--]</span>
+      <span class="audit-log-text" id="auditLogText">Console initialized. Ready for surveillance ingest.</span>
+    </div>
+    <div style="opacity: 0.7;">Mother's Hut Surveillance System v2.4</div>
+  </footer>
+
+  <script src="./js/app.js"></script>
+</body>
+</html>
