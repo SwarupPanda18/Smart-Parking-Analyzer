@@ -31,13 +31,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 import cv2
 import numpy as np
-import torch
 import gc
 from PIL import Image
-try:
-    from ultralytics import YOLO
-except Exception:
-    YOLO = None
 
 # Conserve CPU threads & memory for Render 512MB RAM cap
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -45,12 +40,6 @@ os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
-torch.set_grad_enabled(False)
-try:
-    torch.set_num_threads(1)
-    torch.set_num_interop_threads(1)
-except Exception:
-    pass
 
 app = FastAPI(
     title="Mother's Hut Traffic & Gate Operations Console",
@@ -77,13 +66,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1. Initialize self-hosted ALPR Models
-device_env = os.getenv("DEVICE", "").lower()
-if device_env in ["cpu", "cuda"]:
-    device = torch.device(device_env)
-else:
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Target compute device: {device} (threads constrained for low-memory cloud tiers)")
+device = "cpu"
+print(f"Target compute device: {device} (Pure ONNX Runtime engine active - 100% PyTorch bloat eliminated)")
 
 # --------------------------------------------------------------------
 # Ultra-Low Memory ONNX Runtime Neural Engine (< 25MB RAM per model)
@@ -492,18 +476,8 @@ def is_stable_plate_crop(crop_img, is_night=False):
 
 
 def ocr_single_crop(crop_img):
-    """Runs TrOCR on a single image slice."""
-    if crop_img is None or crop_img.size == 0 or crop_img.shape[0] < 5 or crop_img.shape[1] < 5:
-        return ""
-    proc, mdl = get_trocr_model()
-    if not proc or not mdl:
-        return ""
-    rgb = cv2.cvtColor(crop_img, cv2.COLOR_BGR2RGB)
-    pil_img = Image.fromarray(rgb)
-    pixel_values = proc(pil_img, return_tensors="pt").pixel_values.to(device)
-    with torch.no_grad():
-        generated_ids = mdl.generate(pixel_values, max_new_tokens=15)
-    return proc.batch_decode(generated_ids, skip_special_tokens=True)[0]
+    """TrOCR fallback removed to prevent PyTorch imports and OOM 502 crashes."""
+    return ""
 
 
 def ocr_single_slice_onnx(session, chars, gray_slice):
@@ -831,6 +805,7 @@ def process_frame(img, is_video=False, conf_threshold=0.40, plate_conf=0.18, use
                 cars_in_frame += 1
                 vehicle_boxes.append((v_xyxy, vid, "car"))
             elif cls == 5:     # bus
+
                 bus_ids.append(vid)
                 buses_in_frame += 1
                 vehicle_boxes.append((v_xyxy, vid, "bus"))
