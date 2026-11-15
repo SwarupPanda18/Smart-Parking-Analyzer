@@ -49,13 +49,34 @@
         <div class="camera-header-bar">
           <div class="lens-indicator">
             <span class="lens-dot"></span>
-            <span id="lensIndicatorText">LIVE REAR CAMERA FEED</span>
+            <span id="lensIndicatorText">LIVE CCTV &amp; MOBILE FEED</span>
           </div>
           <button class="btn-pill-small" id="btnFlipCam" title="Switch between Back and Front Camera">🔄 Flip</button>
         </div>
 
-        <div class="camera-viewport">
-          <video id="mobileLiveVideo" autoplay playsinline muted></video>
+        <!-- Mobile Stream View Mode Switcher -->
+        <div class="mobile-dual-mode-bar" id="mobileDualModeBar">
+          <button class="btn-m-mode active" id="btnMModeDual">🪟 DUAL SPLIT</button>
+          <button class="btn-m-mode" id="btnMModeRaw">📹 RAW CAM</button>
+          <button class="btn-m-mode" id="btnMModeAi">🤖 AI TELEMETRY</button>
+        </div>
+
+        <div class="camera-viewport split-mode" id="mobileCameraViewport">
+          <!-- Pane 1: Raw Live Camera Stream -->
+          <div class="mobile-pane-raw" id="mobilePaneRaw">
+            <div class="mobile-pane-tag raw-tag">● RAW CAM-01</div>
+            <video id="mobileLiveVideo" autoplay playsinline muted></video>
+          </div>
+
+          <!-- Pane 2: AI Telemetry & Detections -->
+          <div class="mobile-pane-ai" id="mobilePaneAi">
+            <div class="mobile-pane-tag ai-tag">● AI BYTE-TRACK &amp; ALPR</div>
+            <canvas id="mobileAiCanvas" class="mobile-ai-canvas"></canvas>
+            <img id="mobileAnnotatedImg" class="mobile-annotated-img" style="display:none;" alt="AI Analysis">
+            <div class="mobile-ai-standby" id="mobileAiStandby">
+              <span>⚡ Awaiting vehicle detection...</span>
+            </div>
+          </div>
 
           <!-- Scanning Overlay Reticle -->
           <div class="scanner-overlay" id="scannerOverlay" style="display: none;">

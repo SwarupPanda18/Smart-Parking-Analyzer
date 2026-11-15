@@ -198,30 +198,93 @@
         <div class="viewport-toolbar">
           <div class="viewport-title-group">
             <span class="feed-live-tag">MONITOR</span>
-            <strong style="font-size: 0.85rem; letter-spacing: 0.05em;">GATE-01 // LIVE INFERENCE FEED</strong>
+            <strong style="font-size: 0.85rem; letter-spacing: 0.05em;">CCTV MULTI-STREAM CONSOLE</strong>
           </div>
+
+          <!-- CCTV Stream Layout Mode Selector -->
+          <div class="cctv-mode-selector" id="cctvModeSelector">
+            <button class="btn-mode active" id="btnModeDual" title="Dual Split: Raw Optical + AI Telemetry">
+              <span>🪟 DUAL VIEW</span>
+            </button>
+            <button class="btn-mode" id="btnModeAi" title="Full Focus: AI ByteTrack & ALPR Telemetry">
+              <span>🤖 AI INFERENCE</span>
+            </button>
+            <button class="btn-mode" id="btnModeRaw" title="Full Focus: Raw CCTV Optical Feed">
+              <span>📹 RAW CCTV</span>
+            </button>
+            <button class="btn-mode" id="btnModePip" title="Picture-in-Picture Stream">
+              <span>🔲 PiP</span>
+            </button>
+          </div>
+
           <div class="viewport-controls">
+            <button class="btn-icon" id="btnLiveStreamToggle" title="Toggle Live AI Continuous Stream on Camera">⚡ Live AI: Off</button>
             <button class="btn-icon" id="btnZoomIn" title="Zoom In">+</button>
             <button class="btn-icon" id="btnZoomOut" title="Zoom Out">−</button>
             <button class="btn-icon" id="btnZoomReset" title="Reset Zoom">Reset</button>
-            <button class="btn-icon" id="btnDownloadMedia" title="Download Annotated Media" disabled>⬇ Export Media</button>
+            <button class="btn-icon" id="btnDownloadMedia" title="Download Annotated Media" disabled>⬇ Export</button>
             <button class="btn-icon" id="btnFullscreen" title="Toggle Fullscreen">⛶</button>
           </div>
         </div>
 
-        <!-- Canvas Container -->
-        <div class="viewport-canvas-container" id="viewportContainer">
-          
-          <!-- Idle Empty State -->
-          <div class="viewport-empty" id="viewportEmpty">
-            <div class="reticle-box">⊙</div>
-            <h3>Feed Ready for Analysis</h3>
-            <p>Upload a gate camera capture or select a test sample to initiate detection and recognition.</p>
+        <!-- Dual CCTV Surveillance Container -->
+        <div class="viewport-canvas-container mode-dual" id="viewportContainer">
+
+          <!-- Left Pane: RAW CCTV OPTICAL STREAM -->
+          <div class="cctv-monitor-pane" id="cctvRawPane">
+            <div class="cctv-pane-header">
+              <div class="cctv-pane-badge">
+                <span class="cctv-status-dot raw-dot">●</span>
+                <span>CAM-01 // RAW OPTICAL</span>
+              </div>
+              <div class="cctv-pane-meta" id="cctvRawMeta">FEED READY</div>
+            </div>
+
+            <div class="cctv-pane-stage">
+              <div class="cctv-pane-empty" id="cctvRawEmpty">
+                <div class="reticle-box">📹</div>
+                <h3>Raw CCTV / Camera Feed</h3>
+                <p>Connect camera or upload media to stream pristine optical footage.</p>
+              </div>
+              <video id="cctvRawVideo" class="cctv-feed-video" playsinline muted controls></video>
+              <img id="cctvRawImg" class="cctv-feed-img" alt="Raw CCTV Capture">
+            </div>
+
+            <div class="cctv-pane-subfoot">
+              <span id="cctvRawFootTag">OPTICAL 1080p // DIRECT INGEST</span>
+              <span id="cctvRawFpsTag">30 FPS</span>
+            </div>
           </div>
 
-          <!-- Annotated Output Elements -->
-          <img id="viewportImg" class="viewport-media" alt="Annotated Feed">
-          <video id="viewportVideo" class="viewport-video" controls playsinline></video>
+          <!-- Right Pane: AI TELEMETRY & BYTE-TRACK INFERENCE -->
+          <div class="cctv-monitor-pane" id="cctvAiPane">
+            <div class="cctv-pane-header">
+              <div class="cctv-pane-badge">
+                <span class="cctv-status-dot ai-dot">●</span>
+                <span>GATE-01 // BYTE-TRACK + PADDLEOCR</span>
+              </div>
+              <div class="cctv-pane-meta" id="cctvAiMeta">0.1s MOTION GATE ACTIVE</div>
+            </div>
+
+            <div class="cctv-pane-stage">
+              <!-- Idle Empty State -->
+              <div class="viewport-empty" id="viewportEmpty">
+                <div class="reticle-box">⚡</div>
+                <h3>AI Telemetry Standby</h3>
+                <p>Run analysis or start Live AI to project neural bounding boxes & OCR readings.</p>
+              </div>
+
+              <!-- Annotated Output Elements -->
+              <img id="viewportImg" class="viewport-media cctv-feed-img" alt="Annotated Feed">
+              <video id="viewportVideo" class="viewport-video cctv-feed-video" controls playsinline></video>
+              <canvas id="cctvLiveCanvas" class="cctv-live-canvas"></canvas>
+            </div>
+
+            <div class="cctv-pane-subfoot">
+              <span id="cctvAiFootTag">PADDLEOCR v4 MOBILE + BYTETRACK</span>
+              <span id="cctvAiLatencyTag">~6ms / CPU</span>
+            </div>
+          </div>
 
           <!-- Scanning Overlay -->
           <div class="scanner-overlay" id="scannerOverlay">

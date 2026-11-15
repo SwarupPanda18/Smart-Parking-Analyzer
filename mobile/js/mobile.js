@@ -50,6 +50,15 @@
   const resultMediaWrap = document.getElementById('resultMediaWrap');
   const resultInfoTag = document.getElementById('resultInfoTag');
 
+  // Mobile Dual Viewport Elements
+  const mobileCameraViewport = document.getElementById('mobileCameraViewport');
+  const btnMModeDual = document.getElementById('btnMModeDual');
+  const btnMModeRaw = document.getElementById('btnMModeRaw');
+  const btnMModeAi = document.getElementById('btnMModeAi');
+  const mobileAnnotatedImg = document.getElementById('mobileAnnotatedImg');
+  const mobileAiCanvas = document.getElementById('mobileAiCanvas');
+  const mobileAiStandby = document.getElementById('mobileAiStandby');
+
   // Ledger
   const mobilePlateList = document.getElementById('mobilePlateList');
   const searchPlatesMobile = document.getElementById('searchPlatesMobile');
@@ -609,23 +618,33 @@
       mFloorAlert.textContent = alerts.floor_manager;
     }
 
-    // 3. Render Media Viewport
-    if (data.annotated_media && resultMediaWrap) {
-      resultCard.style.display = 'block';
+    // 3. Render Media Viewport & Dual Pane
+    if (data.annotated_media) {
       const mediaSrc = data.annotated_media.startsWith('http')
         ? data.annotated_media
         : `data:${data.media_type === 'video' ? 'video/mp4' : 'image/jpeg'};base64,${data.annotated_media}`;
-      if (data.media_type === 'video') {
-        resultMediaWrap.innerHTML = `
-          <video controls autoplay playsinline loop style="width:100%; border-radius:8px;">
-            <source src="${mediaSrc}" type="video/mp4">
-          </video>`;
-      } else {
-        resultMediaWrap.innerHTML = `
-          <img src="${mediaSrc}" alt="Annotated Capture" style="width:100%; border-radius:8px;">`;
+
+      // Project into Dual Split Pane AI view
+      if (mobileAnnotatedImg && data.media_type !== 'video') {
+        mobileAnnotatedImg.src = mediaSrc;
+        mobileAnnotatedImg.style.display = 'block';
+        if (mobileAiStandby) mobileAiStandby.style.display = 'none';
       }
-      if (resultInfoTag) {
-        resultInfoTag.textContent = `${data.execution_time_ms}ms · ${data.number_plates.length} Plates`;
+
+      if (resultMediaWrap) {
+        resultCard.style.display = 'block';
+        if (data.media_type === 'video') {
+          resultMediaWrap.innerHTML = `
+            <video controls autoplay playsinline loop style="width:100%; border-radius:8px;">
+              <source src="${mediaSrc}" type="video/mp4">
+            </video>`;
+        } else {
+          resultMediaWrap.innerHTML = `
+            <img src="${mediaSrc}" alt="Annotated Capture" style="width:100%; border-radius:8px;">`;
+        }
+        if (resultInfoTag) {
+          resultInfoTag.textContent = `${data.execution_time_ms}ms · ${data.number_plates.length} Plates`;
+        }
       }
     }
 
@@ -759,6 +778,23 @@
   // Event Bindings
   // -------------------------------------------------------------
   function initEvents() {
+    // Dual View Mode Selector
+    function setMobileMode(mode) {
+      if (!mobileCameraViewport) return;
+      mobileCameraViewport.classList.remove('split-mode', 'raw-mode', 'ai-mode');
+      if (mode === 'dual') mobileCameraViewport.classList.add('split-mode');
+      else if (mode === 'raw') mobileCameraViewport.classList.add('raw-mode');
+      else if (mode === 'ai') mobileCameraViewport.classList.add('ai-mode');
+
+      if (btnMModeDual) btnMModeDual.classList.toggle('active', mode === 'dual');
+      if (btnMModeRaw) btnMModeRaw.classList.toggle('active', mode === 'raw');
+      if (btnMModeAi) btnMModeAi.classList.toggle('active', mode === 'ai');
+    }
+
+    if (btnMModeDual) btnMModeDual.addEventListener('click', () => setMobileMode('dual'));
+    if (btnMModeRaw) btnMModeRaw.addEventListener('click', () => setMobileMode('raw'));
+    if (btnMModeAi) btnMModeAi.addEventListener('click', () => setMobileMode('ai'));
+
     // Live camera toggles
     if (btnToggleLiveCam) {
       btnToggleLiveCam.addEventListener('click', () => {

@@ -27,6 +27,10 @@ document.addEventListener("DOMContentLoaded", () => {
     webcamStream: null,
     cameraFacingMode: "environment", // Default to mobile rear / back camera
     isProcessing: false,
+    cctvMode: "dual", // 'dual' | 'ai' | 'raw' | 'pip'
+    isLiveStreaming: false,
+    liveStreamTimer: null,
+    rawMediaUrl: null,
   };
 
   // DOM Elements
@@ -110,6 +114,22 @@ document.addEventListener("DOMContentLoaded", () => {
     btnFullscreen: document.getElementById("btnFullscreen"),
     viewportContainer: document.getElementById("viewportContainer"),
 
+    // Dual CCTV Stream Monitor Elements
+    cctvRawPane: document.getElementById("cctvRawPane"),
+    cctvRawVideo: document.getElementById("cctvRawVideo"),
+    cctvRawImg: document.getElementById("cctvRawImg"),
+    cctvRawEmpty: document.getElementById("cctvRawEmpty"),
+    cctvRawMeta: document.getElementById("cctvRawMeta"),
+    cctvRawFpsTag: document.getElementById("cctvRawFpsTag"),
+    cctvAiPane: document.getElementById("cctvAiPane"),
+    cctvAiMeta: document.getElementById("cctvAiMeta"),
+    cctvLiveCanvas: document.getElementById("cctvLiveCanvas"),
+    btnModeDual: document.getElementById("btnModeDual"),
+    btnModeAi: document.getElementById("btnModeAi"),
+    btnModeRaw: document.getElementById("btnModeRaw"),
+    btnModePip: document.getElementById("btnModePip"),
+    btnLiveStreamToggle: document.getElementById("btnLiveStreamToggle"),
+
     // Plate Ledger
     plateSearchInput: document.getElementById("plateSearchInput"),
     ledgerDateSelect: document.getElementById("ledgerDateSelect"),
@@ -184,7 +204,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /* ==========================================================
-     2. THEME TOGGLE
+     2. THEME TOGGLE & CCTV MULTI-STREAM CONSOLE
      ========================================================== */
   function initTheme() {
     const savedTheme = localStorage.getItem("app_theme") || "dark";
@@ -198,6 +218,131 @@ document.addEventListener("DOMContentLoaded", () => {
       localStorage.setItem("app_theme", next);
       elements.themeToggleBtn.innerHTML = next === "dark" ? "☀️ Light" : "🌙 Dark";
     });
+  }
+
+  function initCctvConsole() {
+    const savedLayout = localStorage.getItem("cctv_layout_mode") || "dual";
+    setCctvLayout(savedLayout);
+
+    if (elements.btnModeDual) elements.btnModeDual.addEventListener("click", () => setCctvLayout("dual"));
+    if (elements.btnModeAi) elements.btnModeAi.addEventListener("click", () => setCctvLayout("ai"));
+    if (elements.btnModeRaw) elements.btnModeRaw.addEventListener("click", () => setCctvLayout("raw"));
+    if (elements.btnModePip) elements.btnModePip.addEventListener("click", () => setCctvLayout("pip"));
+
+    if (elements.btnLiveStreamToggle) {
+      elements.btnLiveStreamToggle.addEventListener("click", toggleLiveAiStream);
+    }
+  }
+
+  function setCctvLayout(mode) {
+    state.cctvMode = mode;
+    if (elements.viewportContainer) {
+      elements.viewportContainer.classList.remove("mode-dual", "mode-ai", "mode-raw", "mode-pip");
+      elements.viewportContainer.classList.add(`mode-${mode}`);
+    }
+
+    if (elements.btnModeDual) elements.btnModeDual.classList.toggle("active", mode === "dual");
+    if (elements.btnModeAi) elements.btnModeAi.classList.toggle("active", mode === "ai");
+    if (elements.btnModeRaw) elements.btnModeRaw.classList.toggle("active", mode === "raw");
+    if (elements.btnModePip) elements.btnModePip.classList.toggle("active", mode === "pip");
+
+    localStorage.setItem("cctv_layout_mode", mode);
+    logAudit(`Surveillance console layout switched to: ${mode.toUpperCase()} VIEW`);
+  }
+
+  function previewRawMedia(source, isVideo, label) {
+    if (elements.cctvRawEmpty) elements.cctvRawEmpty.style.display = "none";
+    if (elements.cctvRawMeta) elements.cctvRawMeta.textContent = label || "RAW OPTICAL STAGED";
+
+    if (isVideo) {
+      if (elements.cctvRawImg) elements.cctvRawImg.style.display = "none";
+      if (elements.cctvRawVideo) {
+        elements.cctvRawVideo.style.display = "block";
+        if (typeof source === "string") {
+          elements.cctvRawVideo.src = source;
+        } else {
+          if (state.rawMediaUrl) URL.revokeObjectURL(state.rawMediaUrl);
+          state.rawMediaUrl = URL.createObjectURL(source);
+          elements.cctvRawVideo.src = state.rawMediaUrl;
+        }
+        elements.cctvRawVideo.currentTime = 0;
+      }
+    } else {
+      if (elements.cctvRawVideo) elements.cctvRawVideo.style.display = "none";
+      if (elements.cctvRawImg) {
+        elements.cctvRawImg.style.display = "block";
+        if (typeof source === "string") {
+          elements.cctvRawImg.src = source;
+        } else {
+          if (state.rawMediaUrl) URL.revokeObjectURL(state.rawMediaUrl);
+          state.rawMediaUrl = URL.createObjectURL(source);
+          elements.cctvRawImg.src = state.rawMediaUrl;
+        }
+      }
+    }
+  }
+
+  function toggleLiveAiStream() {
+    if (!state.webcamStream) {
+      alert("Please connect the camera first before toggling Live AI Continuous Stream.");
+      return;
+    }
+    state.isLiveStreaming = !state.isLiveStreaming;
+    if (elements.btnLiveStreamToggle) {
+      elements.btnLiveStreamToggle.textContent = state.isLiveStreaming ? "⚡ Live AI: Streaming (ON)" : "⚡ Live AI: Off";
+      elements.btnLiveStreamToggle.style.color = state.isLiveStreaming ? "#10b981" : "";
+      elements.btnLiveStreamToggle.style.borderColor = state.isLiveStreaming ? "#10b981" : "";
+    }
+    if (elements.cctvAiMeta) {
+      elements.cctvAiMeta.textContent = state.isLiveStreaming ? "● LIVE INFERENCE STREAMING" : "0.1s MOTION GATE ACTIVE";
+    }
+
+    if (state.isLiveStreaming) {
+      logAudit("Live AI stream started on CCTV camera feed.");
+      runLiveStreamLoop();
+    } else {
+      if (state.liveStreamTimer) clearTimeout(state.liveStreamTimer);
+      state.liveStreamTimer = null;
+      logAudit("Live AI stream stopped.");
+    }
+  }
+
+  async function runLiveStreamLoop() {
+    if (!state.isLiveStreaming || !state.webcamStream || !elements.webcamVideo || !elements.webcamVideo.videoWidth) {
+      state.liveStreamTimer = setTimeout(runLiveStreamLoop, 1000);
+      return;
+    }
+
+    try {
+      const snapCanvas = document.createElement("canvas");
+      snapCanvas.width = elements.webcamVideo.videoWidth;
+      snapCanvas.height = elements.webcamVideo.videoHeight;
+      const ctx = snapCanvas.getContext("2d");
+      ctx.drawImage(elements.webcamVideo, 0, 0, snapCanvas.width, snapCanvas.height);
+
+      const blob = await new Promise((res) => snapCanvas.toBlob(res, "image/jpeg", 0.75));
+      const conf = elements.confSlider ? parseFloat(elements.confSlider.value) : 0.40;
+      const formData = new FormData();
+      formData.append("file", blob, "live_stream_frame.jpg");
+
+      const response = await fetch(`${API_BASE}/analyze-parking?conf=${conf}`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result && result.status === "success" && state.isLiveStreaming) {
+          renderInferenceResults(result, "LIVE_CAM_FEED", 35);
+        }
+      }
+    } catch (e) {
+      console.warn("Live stream frame error:", e);
+    }
+
+    if (state.isLiveStreaming) {
+      state.liveStreamTimer = setTimeout(runLiveStreamLoop, 1500);
+    }
   }
 
   /* ==========================================================
@@ -262,6 +407,10 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.stagedFileName.textContent = file.name;
     elements.stagedFileSize.textContent = formatBytes(file.size);
     elements.stagedFileCard.classList.add("show");
+
+    const isVideo = file.type.startsWith("video") || /\.(mp4|avi|mov|mkv)$/i.test(file.name);
+    previewRawMedia(file, isVideo, `INGEST: ${file.name}`);
+
     validateProcessButton();
     logAudit(`File staged for analysis: ${file.name} (${formatBytes(file.size)})`);
   }
@@ -271,6 +420,18 @@ document.addEventListener("DOMContentLoaded", () => {
     state.selectedFile = null;
     elements.fileInput.value = "";
     elements.stagedFileCard.classList.remove("show");
+
+    if (elements.cctvRawVideo) {
+      elements.cctvRawVideo.src = "";
+      elements.cctvRawVideo.style.display = "none";
+    }
+    if (elements.cctvRawImg) {
+      elements.cctvRawImg.src = "";
+      elements.cctvRawImg.style.display = "none";
+    }
+    if (elements.cctvRawEmpty) elements.cctvRawEmpty.style.display = "flex";
+    if (elements.cctvRawMeta) elements.cctvRawMeta.textContent = "FEED STANDBY";
+
     validateProcessButton();
     logAudit("Staged file cleared.");
   });
@@ -311,6 +472,7 @@ document.addEventListener("DOMContentLoaded", () => {
           item.classList.add("selected");
           state.selectedSampleUrl = sampleUrl;
           state.selectedFile = null;
+          previewRawMedia(sampleUrl, false, `SAMPLE: ${sample.title}`);
           validateProcessButton();
           logAudit(`Sample feed selected: ${sample.title}`);
         });
@@ -346,6 +508,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       state.webcamStream = stream;
       elements.webcamVideo.srcObject = stream;
+
+      // Project directly to Main CCTV Console Raw Viewport
+      if (elements.cctvRawVideo) {
+        elements.cctvRawVideo.srcObject = stream;
+        elements.cctvRawVideo.style.display = "block";
+        if (elements.cctvRawImg) elements.cctvRawImg.style.display = "none";
+        if (elements.cctvRawEmpty) elements.cctvRawEmpty.style.display = "none";
+        if (elements.cctvRawMeta) elements.cctvRawMeta.textContent = "● LIVE CAM-01 STREAMING";
+        if (elements.cctvRawFpsTag) elements.cctvRawFpsTag.textContent = "30 FPS · OPTICAL LIVE";
+      }
+
       elements.btnToggleWebcam.textContent = "Disconnect Camera";
       elements.btnCaptureWebcam.disabled = false;
       if (elements.cameraLensBadge) {
@@ -360,6 +533,16 @@ document.addEventListener("DOMContentLoaded", () => {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         state.webcamStream = stream;
         elements.webcamVideo.srcObject = stream;
+
+        if (elements.cctvRawVideo) {
+          elements.cctvRawVideo.srcObject = stream;
+          elements.cctvRawVideo.style.display = "block";
+          if (elements.cctvRawImg) elements.cctvRawImg.style.display = "none";
+          if (elements.cctvRawEmpty) elements.cctvRawEmpty.style.display = "none";
+          if (elements.cctvRawMeta) elements.cctvRawMeta.textContent = "● LIVE CAM-01 STREAMING";
+          if (elements.cctvRawFpsTag) elements.cctvRawFpsTag.textContent = "30 FPS · OPTICAL LIVE";
+        }
+
         elements.btnToggleWebcam.textContent = "Disconnect Camera";
         elements.btnCaptureWebcam.disabled = false;
         if (elements.cameraLensBadge) {
@@ -374,11 +557,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function stopWebcam() {
+    if (state.isLiveStreaming) {
+      toggleLiveAiStream();
+    }
     if (state.webcamStream) {
       state.webcamStream.getTracks().forEach((t) => t.stop());
       state.webcamStream = null;
     }
     elements.webcamVideo.srcObject = null;
+    if (elements.cctvRawVideo) {
+      elements.cctvRawVideo.srcObject = null;
+      elements.cctvRawVideo.style.display = "none";
+      if (elements.cctvRawEmpty) elements.cctvRawEmpty.style.display = "flex";
+      if (elements.cctvRawMeta) elements.cctvRawMeta.textContent = "FEED STANDBY";
+    }
     elements.btnToggleWebcam.textContent = "Connect Camera";
     elements.btnCaptureWebcam.disabled = true;
     logAudit("Hardware video device disconnected.");
@@ -704,8 +896,8 @@ document.addEventListener("DOMContentLoaded", () => {
       elements.capacityFill.style.backgroundColor = "var(--status-ok)";
     }
 
-    // 3. Render Media Viewport
-    elements.viewportEmpty.style.display = "none";
+    // 3. Render Media Viewport & Synchronize Dual CCTV Feeds
+    if (elements.viewportEmpty) elements.viewportEmpty.style.display = "none";
     resetZoom();
 
     const mediaSrc = annotated_media.startsWith('http')
@@ -713,14 +905,50 @@ document.addEventListener("DOMContentLoaded", () => {
       : `data:${media_type === "video" ? "video/mp4" : "image/jpeg"};base64,${annotated_media}`;
 
     if (media_type === "video") {
-      elements.viewportImg.style.display = "none";
-      elements.viewportVideo.style.display = "block";
-      elements.viewportVideo.src = mediaSrc;
-      elements.viewportVideo.play();
+      if (elements.viewportImg) elements.viewportImg.style.display = "none";
+      if (elements.viewportVideo) {
+        elements.viewportVideo.style.display = "block";
+        elements.viewportVideo.src = mediaSrc;
+
+        // Synchronize Raw CCTV video with AI Inference video
+        if (elements.cctvRawVideo && elements.cctvRawVideo.src) {
+          elements.cctvRawVideo.currentTime = 0;
+          elements.viewportVideo.currentTime = 0;
+
+          elements.cctvRawVideo.onplay = () => {
+            if (elements.viewportVideo.paused) elements.viewportVideo.play().catch(() => {});
+          };
+          elements.cctvRawVideo.onpause = () => {
+            if (!elements.viewportVideo.paused) elements.viewportVideo.pause();
+          };
+          elements.cctvRawVideo.onseeked = () => {
+            if (Math.abs(elements.viewportVideo.currentTime - elements.cctvRawVideo.currentTime) > 0.15) {
+              elements.viewportVideo.currentTime = elements.cctvRawVideo.currentTime;
+            }
+          };
+
+          elements.viewportVideo.onplay = () => {
+            if (elements.cctvRawVideo.paused) elements.cctvRawVideo.play().catch(() => {});
+          };
+          elements.viewportVideo.onpause = () => {
+            if (!elements.cctvRawVideo.paused) elements.cctvRawVideo.pause();
+          };
+          elements.viewportVideo.onseeked = () => {
+            if (Math.abs(elements.cctvRawVideo.currentTime - elements.viewportVideo.currentTime) > 0.15) {
+              elements.cctvRawVideo.currentTime = elements.viewportVideo.currentTime;
+            }
+          };
+
+          elements.cctvRawVideo.play().catch(() => {});
+        }
+        elements.viewportVideo.play().catch(() => {});
+      }
     } else {
-      elements.viewportVideo.style.display = "none";
-      elements.viewportImg.style.display = "block";
-      elements.viewportImg.src = mediaSrc;
+      if (elements.viewportVideo) elements.viewportVideo.style.display = "none";
+      if (elements.viewportImg) {
+        elements.viewportImg.style.display = "block";
+        elements.viewportImg.src = mediaSrc;
+      }
     }
 
     elements.viewportMetaInfo.textContent = `SRC: ${filename} | LATENCY: ${durationMs}ms | DETECTIONS: ${metrics.total_vehicles}`;
@@ -948,6 +1176,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Run Startup
   initClock();
   initTheme();
+  initCctvConsole();
   checkBackendHealth();
   loadAvailableLedgerDates();
   loadPersistentLedger();
