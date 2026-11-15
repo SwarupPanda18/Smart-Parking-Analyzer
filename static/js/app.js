@@ -708,15 +708,19 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.viewportEmpty.style.display = "none";
     resetZoom();
 
+    const mediaSrc = annotated_media.startsWith('http')
+      ? annotated_media
+      : `data:${media_type === "video" ? "video/mp4" : "image/jpeg"};base64,${annotated_media}`;
+
     if (media_type === "video") {
       elements.viewportImg.style.display = "none";
       elements.viewportVideo.style.display = "block";
-      elements.viewportVideo.src = `data:video/mp4;base64,${annotated_media}`;
+      elements.viewportVideo.src = mediaSrc;
       elements.viewportVideo.play();
     } else {
       elements.viewportVideo.style.display = "none";
       elements.viewportImg.style.display = "block";
-      elements.viewportImg.src = `data:image/jpeg;base64,${annotated_media}`;
+      elements.viewportImg.src = mediaSrc;
     }
 
     elements.viewportMetaInfo.textContent = `SRC: ${filename} | LATENCY: ${durationMs}ms | DETECTIONS: ${metrics.total_vehicles}`;
@@ -754,7 +758,7 @@ document.addEventListener("DOMContentLoaded", () => {
       card.dataset.plate = `${plateText} ${stateCode} ${stateName.toUpperCase()}`;
 
       const timeLogged = new Date().toLocaleTimeString("en-GB", { hour12: false });
-      const cropSrc = plate.chunk ? `data:image/jpeg;base64,${plate.chunk}` : "";
+      const cropSrc = plate.chunk ? (plate.chunk.startsWith("http") ? plate.chunk : `data:image/jpeg;base64,${plate.chunk}`) : "";
       const isVerified = plate.is_valid_format !== false;
 
       card.innerHTML = `
@@ -837,7 +841,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!state.lastResult || !state.lastResult.annotated_media) return;
     const a = document.createElement("a");
     const isVideo = state.lastResult.media_type === "video";
-    a.href = `data:${isVideo ? "video/mp4" : "image/jpeg"};base64,${state.lastResult.annotated_media}`;
+    const media = state.lastResult.annotated_media;
+    if (media.startsWith("http")) {
+      a.href = media;
+      a.target = "_blank";
+    } else {
+      a.href = `data:${isVideo ? "video/mp4" : "image/jpeg"};base64,${media}`;
+    }
     a.download = `mothers_hut_annotated_${Date.now()}.${isVideo ? "mp4" : "jpg"}`;
     a.click();
     logAudit("Annotated media export downloaded.");

@@ -606,14 +606,17 @@
     // 3. Render Media Viewport
     if (data.annotated_media && resultMediaWrap) {
       resultCard.style.display = 'block';
+      const mediaSrc = data.annotated_media.startsWith('http')
+        ? data.annotated_media
+        : `data:${data.media_type === 'video' ? 'video/mp4' : 'image/jpeg'};base64,${data.annotated_media}`;
       if (data.media_type === 'video') {
         resultMediaWrap.innerHTML = `
           <video controls autoplay playsinline loop style="width:100%; border-radius:8px;">
-            <source src="data:video/mp4;base64,${data.annotated_media}" type="video/mp4">
+            <source src="${mediaSrc}" type="video/mp4">
           </video>`;
       } else {
         resultMediaWrap.innerHTML = `
-          <img src="data:image/jpeg;base64,${data.annotated_media}" alt="Annotated Capture" style="width:100%; border-radius:8px;">`;
+          <img src="${mediaSrc}" alt="Annotated Capture" style="width:100%; border-radius:8px;">`;
       }
       if (resultInfoTag) {
         resultInfoTag.textContent = `${data.execution_time_ms}ms · ${data.number_plates.length} Plates`;

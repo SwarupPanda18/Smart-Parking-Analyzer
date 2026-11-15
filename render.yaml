@@ -27,3 +27,13 @@ services:
         value: "1"
       - key: DATABASE_URL
         value: postgresql://postgres.fksxkdabjoihtoebpuxq:vir%40tKohli18@aws-1-ap-south-1.pooler.supabase.com:6543/postgres
+      - key: SUPABASE_S3_ENDPOINT
+        value: https://fksxkdabjoihtoebpuxq.storage.supabase.co/storage/v1/s3
+      - key: SUPABASE_S3_ACCESS_KEY_ID
+        value: f20805943a7e1528a7c582fb9e3bcfd6
+      - key: SUPABASE_S3_SECRET_ACCESS_KEY
+        value: 0b7207704039c29e9f6fa03676fa203c5de87423ac752881b467b2251d5ebbb8
+      - key: SUPABASE_S3_BUCKET
+        value: mothers-hut-storage
+      - key: SUPABASE_S3_REGION
+        value: ap-south-1

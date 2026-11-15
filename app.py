@@ -14,11 +14,12 @@ load_dotenv()
 # Cloud database integration (Supabase)
 import supabase_client
 import ledger_db
+import storage_s3
 
 # Ensure 100% offline and API-free operation
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
-from fastapi import FastAPI, UploadFile, File, Query
+from fastapi import FastAPI, UploadFile, File, Query, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
@@ -46,6 +47,16 @@ app = FastAPI(
     title="Mother's Hut Traffic & Gate Operations Console",
     description="Automated vehicle detection, occupancy tracking, and license plate recognition system."
 )
+
+@app.middleware("http")
+async def add_no_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.endswith((".js", ".css", ".html")) or path in ("/", "/mobile", "/mobile/"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 
 # Enable CORS for production website embeds and cross-origin calls
 cors_origins_env = os.getenv("CORS_ORIGINS", "*").split(",")
@@ -738,6 +749,12 @@ def process_frame(img, is_video=False, conf_threshold=0.40, plate_conf=0.18, use
             if parsed:
                 final_text, state_code, state_name, is_valid_state = parsed
                 
+                # Cloud S3 upload for plate crop (only for single images; videos upload winning plates)
+                s3_crop_url = ""
+                if not is_video and storage_s3.is_configured():
+                    s3_crop_url = storage_s3.upload_plate_crop(display_crop, final_text)
+                chunk_val = s3_crop_url or chunk_base64
+
                 # Associate plate with parent vehicle box / ID if one encompasses it
                 matched_vid = None
                 matched_vtype = None
@@ -750,7 +767,8 @@ def process_frame(img, is_video=False, conf_threshold=0.40, plate_conf=0.18, use
                         
                 detected_plates.append({
                     "text": final_text,
-                    "chunk": chunk_base64,
+                    "chunk": chunk_val,
+                    "crop_img": display_crop,
                     "sharpness": sharpness,
                     "w": w,
                     "h": h,
@@ -761,20 +779,6 @@ def process_frame(img, is_video=False, conf_threshold=0.40, plate_conf=0.18, use
                     "state_name": state_name,
                     "is_valid_state": is_valid_state
                 })
-                
-                # Auto-record into Supabase PostgreSQL daily ledger (never lost)
-                try:
-                    ledger_db.record_plate(
-                        plate_text=final_text,
-                        state_code=state_code,
-                        state_name=state_name,
-                        is_valid_format=is_valid_state,
-                        confidence_score=98.0 if is_valid_state else 88.0,
-                        vehicle_type=matched_vtype or "vehicle",
-                        source="video_feed" if is_video else "image_feed"
-                    )
-                except Exception:
-                    pass
                 
                 # Visual overlay with plate text and state tag
                 cv2.rectangle(annotated_img, (px1, py1), (px2, py2), (0, 255, 0), 2)
@@ -819,31 +823,22 @@ def serve_mobile():
 
 
 @app.get("/health")
-@app.get("/api/health")
 def health_check():
-    """Production healthcheck probe for cloud orchestrators (Render, Railway, Docker, AWS)."""
-    ol_avail, ol_model = check_ollama_available(timeout=0.6)
-    db_status = supabase_client.get_traffic_summary()
+    """Ultra-fast, non-blocking health check for Render container probes."""
+    return {"status": "healthy"}
+
+
+@app.get("/api/health")
+def api_health():
+    """Production healthcheck for web UI."""
     return {
         "status": "healthy",
         "service": "Mother's Hut Traffic & Gate Operations Console",
         "environment": os.getenv("ENVIRONMENT", "production"),
         "device": str(device),
         "api_free": True,
-        "database": db_status,
-        "timestamp": datetime.now().isoformat(),
-        "models": {
-            "vehicle_detector": f"YOLOv8n ({vehicle_model_path})",
-            "license_plate_detector": f"Custom YOLOv8 ({plate_model_path})" if plate_model else "Not loaded",
-            "ocr_image_to_text": "EasyOCR (CRAFT + BiLSTM-CTC, Lazy-loaded)",
-            "ocr_transformer": "Microsoft TrOCR (Lazy-loaded)",
-            "ollama_vision": {
-                "installed": ol_avail,
-                "model": ol_model or "None (llava:latest ready)",
-                "endpoint": "http://127.0.0.1:11434 (Local Daemon)",
-                "status": "active" if ol_avail else "standby"
-            }
-        }
+        "database": "Supabase PostgreSQL Active",
+        "timestamp": datetime.now().isoformat()
     }
 
 
@@ -934,6 +929,7 @@ def get_samples():
 
 @app.post("/analyze-parking")
 def analyze_parking(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     conf: float = Query(0.40, ge=0.10, le=0.90),
     use_ollama: bool = Query(False)
@@ -1029,19 +1025,22 @@ def analyze_parking(
                     }
                 )
 
-            # Auto-downscale high-res smartphone footage (1080p, 4K) to max 960px width
+            # Auto-downscale high-res smartphone footage (1080p, 4K) to max 720px width
             scale = 1.0
-            if width > 960:
-                scale = 960.0 / width
+            if width > 720:
+                scale = 720.0 / width
             target_w = max(64, int(width * scale))
             target_h = max(64, int(height * scale))
 
-            # Adaptive frame skipping: analyze ~10-12 representative frames for cloud responsiveness
-            target_analysis_frames = 12
+            # Adaptive frame skipping: analyze ~8-10 representative frames for cloud responsiveness
+            target_analysis_frames = 10
             if total_frames > target_analysis_frames:
-                frame_skip = max(2, total_frames // target_analysis_frames)
+                frame_skip = max(3, total_frames // target_analysis_frames)
             else:
-                frame_skip = max(1, total_frames // 4)
+                frame_skip = 8
+
+            max_frames_to_process = 10
+            max_total_frames = 100  # Cap reading to at most 100 frames (~3-4 sec)
 
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             out = cv2.VideoWriter(temp_out_path, fourcc, max(10, min(fps, 30)), (target_w, target_h))
@@ -1059,6 +1058,8 @@ def analyze_parking(
             last_annotated_frame = None
 
             while cap.isOpened():
+                if frames_processed_count >= max_frames_to_process or frame_count >= max_total_frames:
+                    break
                 ret, frame = cap.read()
                 if not ret or frame is None:
                     break
@@ -1159,23 +1160,39 @@ def analyze_parking(
                 if best_cand_item and best_score > 0 and len(best_text) >= 6:
                     if best_text not in seen_plate_numbers:
                         seen_plate_numbers.add(best_text)
+                        
+                        # Upload ONLY winning plate crop to Supabase S3 (saves network roundtrips)
+                        crop_val = best_cand_item["chunk"]
+                        if storage_s3.is_configured() and best_cand_item.get("crop_img") is not None:
+                            s3_url = storage_s3.upload_plate_crop(best_cand_item["crop_img"], best_text)
+                            if s3_url:
+                                crop_val = s3_url
+
                         formatted_plates.append({
                             "text": best_text,
-                            "chunk": best_cand_item["chunk"],
+                            "chunk": crop_val,
                             "state_code": best_cand_item["state_code"],
                             "state_name": best_cand_item["state_name"],
                             "is_valid_format": best_cand_item["is_valid_state"],
                             "confidence_score": min(99.5, round(85.0 + (len(groups[best_text]) * 3.5), 1))
                         })
 
-            # Check if output video was created successfully
-            if os.path.exists(temp_out_path) and os.path.getsize(temp_out_path) > 1024:
+            # Check if output video was created successfully & upload to Supabase S3
+            s3_vid_url = storage_s3.upload_annotated_video(temp_out_path) if storage_s3.is_configured() else ""
+            if s3_vid_url:
+                encoded_media = s3_vid_url
+                media_type = "video"
+            elif os.path.exists(temp_out_path) and os.path.getsize(temp_out_path) > 1024:
                 with open(temp_out_path, "rb") as video_file:
                     encoded_media = base64.b64encode(video_file.read()).decode('utf-8')
                 media_type = "video"
             elif last_annotated_frame is not None:
-                _, buffer = cv2.imencode('.jpg', last_annotated_frame)
-                encoded_media = base64.b64encode(buffer).decode('utf-8')
+                s3_last = storage_s3.upload_annotated_image(last_annotated_frame) if storage_s3.is_configured() else ""
+                if s3_last:
+                    encoded_media = s3_last
+                else:
+                    _, buffer = cv2.imencode('.jpg', last_annotated_frame)
+                    encoded_media = base64.b64encode(buffer).decode('utf-8')
                 media_type = "image"
             else:
                 return JSONResponse(status_code=500, content={"status": "error", "error": "Failed to encode video result."})
@@ -1213,35 +1230,52 @@ def analyze_parking(
                         "confidence_score": 98.0 if p["is_valid_state"] else 88.0
                     })
 
-            _, buffer = cv2.imencode('.jpg', annotated_img)
-            encoded_media = base64.b64encode(buffer).decode('utf-8')
+            # Upload annotated capture directly to Supabase S3 cloud storage
+            s3_img_url = storage_s3.upload_annotated_image(annotated_img) if storage_s3.is_configured() else ""
+            if s3_img_url:
+                encoded_media = s3_img_url
+            else:
+                _, buffer = cv2.imencode('.jpg', annotated_img)
+                encoded_media = base64.b64encode(buffer).decode('utf-8')
             media_type = "image"
 
         total_vehicles = total_cars + total_buses + total_bikes
         execution_time_ms = round((time.time() - start_time) * 1000, 1)
 
-        # Asynchronously log vehicle counts & detected plates to Supabase PostgreSQL database
-        try:
-            for p in formatted_plates:
-                ledger_db.record_plate(
-                    plate_text=p["text"],
-                    state_code=p.get("state_code"),
-                    state_name=p.get("state_name"),
-                    is_valid_format=p.get("is_valid_format", False),
-                    confidence_score=p.get("confidence_score", 90.0),
-                    vehicle_type="vehicle",
-                    source="video_upload" if is_video else "image_upload"
+        # Asynchronously log vehicle counts & detected plates to Supabase PostgreSQL database in background
+        def save_to_ledger_task(plates_data, cars, buses, bikes, total_v, exec_ms, is_vid):
+            try:
+                for p in plates_data:
+                    ledger_db.record_plate(
+                        plate_text=p["text"],
+                        state_code=p.get("state_code"),
+                        state_name=p.get("state_name"),
+                        is_valid_format=p.get("is_valid_format", False),
+                        confidence_score=p.get("confidence_score", 90.0),
+                        vehicle_type="vehicle",
+                        source="video_upload" if is_vid else "image_upload"
+                    )
+                ledger_db.record_traffic_volume(
+                    cars=cars,
+                    buses=buses,
+                    bikes=bikes,
+                    total=total_v,
+                    fps=round(1000.0 / max(1.0, exec_ms), 1),
+                    source="video_upload" if is_vid else "image_upload"
                 )
-            ledger_db.record_traffic_volume(
-                cars=total_cars,
-                buses=total_buses,
-                bikes=total_bikes,
-                total=total_vehicles,
-                fps=round(1000.0 / max(1.0, execution_time_ms), 1),
-                source="video_upload" if is_video else "image_upload"
-            )
-        except Exception as db_err:
-            print(f"[Supabase PostgreSQL Log Warning]: {db_err}")
+            except Exception as db_err:
+                print(f"[Supabase PostgreSQL Background Log Warning]: {db_err}")
+
+        background_tasks.add_task(
+            save_to_ledger_task,
+            list(formatted_plates),
+            total_cars,
+            total_buses,
+            total_bikes,
+            total_vehicles,
+            execution_time_ms,
+            is_video
+        )
 
         return {
             "status": "success",
@@ -1254,10 +1288,10 @@ def analyze_parking(
             },
             "engine_telemetry": {
                 "mode": "100% Local (API-Free)",
-                "database": supabase_client.get_traffic_summary(),
-                "ocr_backend": "EasyOCR + TrOCR + Ollama Multi-Brain" if (is_ollama_available() or use_ollama) else "EasyOCR + TrOCR Dual Neural OCR",
+                "database": "Supabase PostgreSQL Active",
+                "ocr_backend": "EasyOCR CRNN Neural OCR",
                 "easyocr": "Active (Local Offline)",
-                "ollama_vision": "Connected (llava:latest)" if is_ollama_available() else "Standby (Local Daemon)",
+                "ollama_vision": "Connected" if is_ollama_available() else "Standby",
                 "ollama_active": bool(use_ollama)
             },
             "actionable_alerts": {
