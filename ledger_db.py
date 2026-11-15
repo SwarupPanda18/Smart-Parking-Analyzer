@@ -195,6 +195,11 @@ def record_plate(plate_text, state_code=None, state_name=None, is_valid_format=F
                 str(source)[:32]
             ))
             conn.commit()
+            try:
+                import master_sync
+                master_sync.notify_traffic_recorded()
+            except Exception:
+                pass
             return True
     except Exception as e:
         logger.error(f"[PostgreSQL Record Plate Error]: {e}")
@@ -234,6 +239,11 @@ def record_traffic_volume(cars=0, buses=0, bikes=0, total=None, fps=0.0, source=
                 str(source)[:32]
             ))
             conn.commit()
+            try:
+                import master_sync
+                master_sync.notify_traffic_recorded()
+            except Exception:
+                pass
             return True
     except Exception as e:
         logger.error(f"[PostgreSQL Volume Error]: {e}")

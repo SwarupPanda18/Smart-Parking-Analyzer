@@ -1317,6 +1317,35 @@ def get_db_plates(limit: int = 25):
     return {"plates": supabase_client.get_recent_plate_detections(limit=limit)}
 
 
+@app.on_event("startup")
+def on_app_startup():
+    """Starts background synchronization daemon for Master Supabase on startup."""
+    try:
+        import master_sync
+        master_sync.start_master_sync_daemon()
+    except Exception as e:
+        print(f"Notice: Master sync daemon start note ({e})")
+
+
+@app.get("/api/master/status")
+def get_master_status_endpoint():
+    """Returns live connection health, interval count, and recent rows from Master Supabase."""
+    import master_sync
+    return master_sync.get_master_status()
+
+
+@app.post("/api/master/sync")
+def trigger_master_sync_endpoint():
+    """Triggers an immediate catchup sync of all historical 5-minute vehicle windows to Master Supabase."""
+    import master_sync
+    results = master_sync.sync_all_history()
+    return {
+        "status": "success",
+        "synced_intervals_count": len(results),
+        "intervals": results
+    }
+
+
 # ====================================================================
 # Supabase PostgreSQL Persistent Daily Ledger Endpoints
 # ====================================================================
