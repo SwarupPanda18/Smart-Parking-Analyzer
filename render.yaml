@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: smart-parking-analyzer
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ENVIRONMENT
+        value: production
+      - key: DEVICE
+        value: cpu
+      - key: ENABLE_TROCR
+        value: "false"
+      - key: DATABASE_URL
+        value: postgresql://postgres.fksxkdabjoihtoebpuxq:vir%40tKohli18@aws-1-ap-south-1.pooler.supabase.com:6543/postgres
