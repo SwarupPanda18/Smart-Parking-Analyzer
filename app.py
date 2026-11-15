@@ -18,6 +18,8 @@ import storage_s3
 
 # Ensure 100% offline and API-free operation
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ["YOLO_VERBOSE"] = "False"
+os.environ["ULTRALYTICS_AUTOINSTALL"] = "0"
 
 from fastapi import FastAPI, UploadFile, File, Query, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -395,7 +397,7 @@ def ocr_with_easyocr(crop_img):
         try:
             results = reader.recognize(scaled_crop, horizontal_list=boxes, free_list=[])
         except Exception:
-            results = reader.readtext(scaled_crop, detail=1, paragraph=False, canvas_size=320)
+            results = []
 
         if not results:
             return []
@@ -700,6 +702,10 @@ def process_frame(img, is_video=False, conf_threshold=0.40, plate_conf=0.18, use
                     if not dup:
                         raw_plate_boxes.append(pb)
 
+        # Cap plate detections to top 6 highest-confidence boxes to avoid CPU congestion
+        if raw_plate_boxes:
+            raw_plate_boxes = sorted(raw_plate_boxes, key=lambda b: float(b.conf[0]), reverse=True)[:6]
+
         # Process ALL detected plates autonomously (not contingent on car bounding box)
         for plate_box in raw_plate_boxes:
             px1, py1, px2, py2 = map(int, plate_box.xyxy[0])
@@ -811,24 +817,34 @@ app.mount("/js", StaticFiles(directory="static/js"), name="js")
 app.mount("/mobile", StaticFiles(directory="mobile", html=True), name="mobile")
 
 
-@app.get("/")
+@app.head("/{full_path:path}")
+def handle_all_head_requests(full_path: str):
+    """Answers any Render, Cloudflare, or container HEAD health probes with 200 OK."""
+    return Response(status_code=200)
+
+
+@app.api_route("/", methods=["GET", "HEAD"])
 def serve_index():
     return FileResponse("static/index.html")
 
 
-@app.get("/mobile")
-@app.get("/mobile/")
+@app.api_route("/mobile", methods=["GET", "HEAD"])
+def serve_mobile_redirect():
+    return RedirectResponse(url="/mobile/", status_code=301)
+
+
+@app.api_route("/mobile/", methods=["GET", "HEAD"])
 def serve_mobile():
     return FileResponse("mobile/index.html")
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
     """Ultra-fast, non-blocking health check for Render container probes."""
-    return {"status": "healthy"}
+    return Response(content='{"status":"healthy"}', media_type="application/json", status_code=200)
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def api_health():
     """Production healthcheck for web UI."""
     return {
@@ -840,6 +856,17 @@ def api_health():
         "database": "Supabase PostgreSQL Active",
         "timestamp": datetime.now().isoformat()
     }
+
+
+# Fallback asset routing if mobile requests are sent without /mobile prefix
+@app.get("/css/mobile.css")
+def serve_mobile_css_fallback():
+    return FileResponse("mobile/css/mobile.css")
+
+
+@app.get("/js/mobile.js")
+def serve_mobile_js_fallback():
+    return FileResponse("mobile/js/mobile.js")
 
 
 @app.get("/launch")
