@@ -15,5 +15,15 @@ services:
         value: cpu
       - key: ENABLE_TROCR
         value: "false"
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: OPENBLAS_NUM_THREADS
+        value: "1"
+      - key: MKL_NUM_THREADS
+        value: "1"
+      - key: VECLIB_MAXIMUM_THREADS
+        value: "1"
+      - key: NUMEXPR_NUM_THREADS
+        value: "1"
       - key: DATABASE_URL
         value: postgresql://postgres.fksxkdabjoihtoebpuxq:vir%40tKohli18@aws-1-ap-south-1.pooler.supabase.com:6543/postgres

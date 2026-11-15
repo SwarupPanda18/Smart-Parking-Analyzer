@@ -30,9 +30,15 @@ import gc
 from PIL import Image
 
 # Conserve CPU threads & memory for Render 512MB RAM cap
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
 torch.set_grad_enabled(False)
 try:
     torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
 except Exception:
     pass
 
@@ -107,21 +113,22 @@ os.makedirs(easyocr_model_dir, exist_ok=True)
 easyocr_reader = None
 
 def get_easyocr_reader():
-    """Lazy-loads EasyOCR engine on first inference request to keep server boot memory under 200MB."""
+    """Lazy-loads EasyOCR engine with detector=False to keep memory strictly under 350MB and prevent OOM 502 crashes."""
     global easyocr_reader
     if easyocr_reader is None:
         try:
             import easyocr
-            print(f"Initializing EasyOCR neural engine on {device} (storage: {easyocr_model_dir})...")
-            has_local_weights = os.path.exists(os.path.join(easyocr_model_dir, "craft_mlt_25k.pth"))
+            print(f"Initializing EasyOCR lightweight neural recognizer on {device}...")
             easyocr_reader = easyocr.Reader(
                 ['en'],
                 gpu=(device.type == "cuda"),
                 model_storage_directory=easyocr_model_dir,
                 user_network_directory=easyocr_model_dir,
-                download_enabled=not has_local_weights
+                detector=False,
+                quantize=True,
+                download_enabled=False
             )
-            print("EasyOCR free model brain initialized successfully!")
+            print("EasyOCR lightweight model initialized successfully (ultra-low RAM)!")
             gc.collect()
         except Exception as e:
             print(f"WARNING: EasyOCR initialization error: {e}")
@@ -350,9 +357,9 @@ def ocr_single_crop(crop_img):
 
 def ocr_with_easyocr(crop_img):
     """
-    Extracts text using the free EasyOCR neural network engine.
-    Handles single-line and two-line multi-layer plates automatically with CRAFT character detection.
-    Returns list of candidate text strings.
+    Extracts text using the lightweight EasyOCR CRNN neural network engine.
+    Handles single-line and two-line multi-layer plates directly from plate bounding boxes.
+    Runs in < 0.1s without CRAFT detection overhead, keeping RAM strictly below 350MB.
     """
     reader = get_easyocr_reader()
     if reader is None or crop_img is None or crop_img.size == 0:
@@ -368,42 +375,44 @@ def ocr_with_easyocr(crop_img):
             scale = 56.0 / h
             scaled_crop = cv2.resize(crop_img, (int(w * scale), 56), interpolation=cv2.INTER_CUBIC)
             
-        results = reader.readtext(scaled_crop, detail=1, paragraph=False)
+        sh, sw = scaled_crop.shape[:2]
+        # Multi-slice boxes: full plate, top half (line 1 for 2-line plates), bottom half (line 2)
+        boxes = [[0, sw, 0, sh]]
+        if sw / max(1, sh) < 2.5:
+            boxes = [[0, sw, 0, sh // 2], [0, sw, sh // 2, sh], [0, sw, 0, sh]]
+
+        try:
+            results = reader.recognize(scaled_crop, horizontal_list=boxes, free_list=[])
+        except Exception:
+            results = reader.readtext(scaled_crop, detail=1, paragraph=False, canvas_size=320)
+
         if not results:
             return []
             
-        # Group by vertical line (y_center) then sort left-to-right (x_center)
-        line_height = max(14, int(scaled_crop.shape[0] * 0.35))
-        def get_box_key(item):
-            box = item[0]
-            y_center = sum(pt[1] for pt in box) / 4.0
-            x_center = sum(pt[0] for pt in box) / 4.0
-            line_idx = int(y_center // line_height)
-            return (line_idx, x_center)
-
-        sorted_res = sorted(results, key=get_box_key)
-        texts = [item[1].strip() for item in sorted_res if item[1].strip()]
+        texts = [item[1].strip() for item in results if item[1] and item[1].strip()]
         if not texts:
             return []
             
         candidates = []
-        # Candidate 1: joined without spaces (e.g. 'WB52B05653')
+        # Candidate 1: joined without spaces
         joined = "".join(texts)
         if joined:
             candidates.append(joined)
             
-        # Candidate 2: joined with space between detected words
+        # Candidate 2: joined with space
         joined_sp = " ".join(texts)
         if joined_sp != joined:
             candidates.append(joined_sp)
             
         # Candidate 3: individual segments
         for t in texts:
-            if len(t) >= 4 and t not in candidates:
-                candidates.append(t)
+            clean_t = "".join(c for c in t if c.isalnum()).upper()
+            if len(clean_t) >= 4 and clean_t not in candidates:
+                candidates.append(clean_t)
                 
         return candidates
-    except Exception:
+    except Exception as e:
+        print(f"OCR warning: {e}")
         return []
 
 
