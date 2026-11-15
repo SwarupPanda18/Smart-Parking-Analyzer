@@ -850,8 +850,6 @@ body {
   font-weight: 800;
   font-family: var(--font-mono);
   color: #411d21;
-}
-  color: var(--text-main);
   line-height: 1.1;
 }
 
