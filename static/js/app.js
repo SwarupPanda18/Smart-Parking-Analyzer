@@ -517,22 +517,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
       clearInterval(stageTimer);
 
-      if (!response.ok) {
-        let errDetails = `HTTP ${response.status}`;
-        try {
-          const errJson = await response.json();
-          if (errJson && errJson.error) {
-            errDetails = errJson.error;
-          }
-        } catch (_) {
-          const errorText = await response.text();
-          if (errorText) errDetails = errorText;
+      const rawText = await response.text();
+      let result = null;
+      try {
+        result = JSON.parse(rawText);
+      } catch (_) {
+        let parsedErr = `HTTP ${response.status}`;
+        if (rawText && rawText.includes('<title>')) {
+          const m = rawText.match(/<title>(.*?)<\/title>/i);
+          if (m && m[1]) parsedErr = m[1].trim();
+        } else if (rawText) {
+          parsedErr = rawText.slice(0, 160).trim();
         }
-        throw new Error(errDetails);
+        throw new Error(parsedErr);
       }
 
-      const result = await response.json();
-      if (result.status === "error") {
+      if (!response.ok) {
+        throw new Error((result && result.error) ? result.error : `HTTP ${response.status}`);
+      }
+
+      if (result && result.status === "error") {
         throw new Error(result.error || "Server reported analysis error.");
       }
 

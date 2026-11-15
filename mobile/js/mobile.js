@@ -544,22 +544,26 @@
         body: formData
       });
 
-      if (!res.ok) {
-        let errDetails = `HTTP ${res.status}`;
-        try {
-          const errJson = await res.json();
-          if (errJson && errJson.error) {
-            errDetails = errJson.error;
-          }
-        } catch (_) {
-          const errText = await res.text();
-          if (errText) errDetails = errText;
+      const rawText = await res.text();
+      let data = null;
+      try {
+        data = JSON.parse(rawText);
+      } catch (_) {
+        let parsedErr = `HTTP ${res.status}`;
+        if (rawText && rawText.includes('<title>')) {
+          const m = rawText.match(/<title>(.*?)<\/title>/i);
+          if (m && m[1]) parsedErr = m[1].trim();
+        } else if (rawText) {
+          parsedErr = rawText.slice(0, 160).trim();
         }
-        throw new Error(errDetails);
+        throw new Error(parsedErr);
       }
 
-      const data = await res.json();
-      if (data.status === 'error') {
+      if (!res.ok) {
+        throw new Error((data && data.error) ? data.error : `HTTP ${res.status}`);
+      }
+
+      if (data && data.status === 'error') {
         throw new Error(data.error || 'Server reported analysis error.');
       }
 

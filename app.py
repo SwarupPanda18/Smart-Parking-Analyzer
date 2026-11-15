@@ -78,14 +78,15 @@ except Exception as e:
     print(f"WARNING: Plate model failed to load ({plate_model_path}): {e}")
     plate_model = None
 
-# TrOCR lazy-loading (saves >280MB RAM on startup for low-memory cloud tiers like Render)
+# TrOCR is disabled by default on cloud/low-memory instances to prevent downloading 250MB and hitting 50s timeouts
+ENABLE_TROCR = os.getenv("ENABLE_TROCR", "false").lower() in ("true", "1", "yes")
 processor = None
 trocr_model = None
 
 def get_trocr_model():
-    """Lazy-loads Microsoft TrOCR model on demand only if needed."""
+    """Lazy-loads Microsoft TrOCR model on demand only if explicitly enabled (saves 280MB RAM & network timeouts)."""
     global processor, trocr_model
-    if trocr_model is False:
+    if not ENABLE_TROCR or trocr_model is False:
         return None, None
     if trocr_model is None:
         try:
@@ -501,22 +502,18 @@ def recognize_plate_multi_layout(plate_crop, use_ollama=False):
     h, w = plate_crop.shape[:2]
     aspect_ratio = float(w) / float(h)
     
-    # 1. Generate complementary lighting/noise recovery variants
-    variants = []
+    # 1. Test raw crop first (fastest & highest fidelity in standard illumination)
+    variants = [plate_crop]
     
-    # Variant A: Illumination-normalized & Bilateral Denoised (neutralizes glare & sensor grain)
-    cleaned = clean_plate_lighting_and_noise(plate_crop)
-    if cleaned is not None:
-        variants.append(cleaned)
-        
-    # Variant B: Original crop
-    variants.append(plate_crop)
-    
-    # Variant C: CLAHE boosted (illuminates deep shadows for dark night captures)
+    # Add denoised/illuminated variant as secondary fallback
     if is_dark_image(plate_crop, threshold=88.0):
         clahe_boost = enhance_low_light(plate_crop, clip_limit=3.0)
         if clahe_boost is not None:
             variants.append(clahe_boost)
+    else:
+        cleaned = clean_plate_lighting_and_noise(plate_crop)
+        if cleaned is not None:
+            variants.append(cleaned)
             
     # --- PHASE 1: Primary Free Neural OCR Engine (EasyOCR) ---
     easy_candidates = []
@@ -531,6 +528,10 @@ def recognize_plate_multi_layout(plate_crop, use_ollama=False):
             p = parse_and_validate_plate(c)
             if p and p[3]:  # is_valid_state == True
                 return p
+
+        # Fast-path: if original crop yielded text candidates, skip slower auxiliary passes
+        if easy_candidates:
+            break
 
     # Select best candidate from EasyOCR
     best_parsed = None
@@ -1019,18 +1020,19 @@ def analyze_parking(
                     }
                 )
 
-            # Auto-downscale high-res smartphone footage (1080p, 4K) to max 1280px width
+            # Auto-downscale high-res smartphone footage (1080p, 4K) to max 960px width
             scale = 1.0
-            if width > 1280:
-                scale = 1280.0 / width
+            if width > 960:
+                scale = 960.0 / width
             target_w = max(64, int(width * scale))
             target_h = max(64, int(height * scale))
 
-            # Adaptive frame skipping: target analyzing ~40 to 70 representative frames
-            if total_frames > 0:
-                frame_skip = max(3, total_frames // 50)
+            # Adaptive frame skipping: analyze ~10-12 representative frames for cloud responsiveness
+            target_analysis_frames = 12
+            if total_frames > target_analysis_frames:
+                frame_skip = max(2, total_frames // target_analysis_frames)
             else:
-                frame_skip = 4
+                frame_skip = max(1, total_frames // 4)
 
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             out = cv2.VideoWriter(temp_out_path, fourcc, max(10, min(fps, 30)), (target_w, target_h))
@@ -1175,6 +1177,14 @@ def analyze_parking(
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             if img is None:
                 return JSONResponse(status_code=400, content={"status": "error", "error": "Failed to decode uploaded image. File format might be corrupted."})
+
+            # Auto-downscale high-res smartphone captures (4K, 12MP, 48MP) to max 1280px
+            # Speeds up inference by 10x and prevents OOM on cloud servers
+            h_orig, w_orig = img.shape[:2]
+            max_dim = max(h_orig, w_orig)
+            if max_dim > 1280:
+                scale = 1280.0 / max_dim
+                img = cv2.resize(img, (int(w_orig * scale), int(h_orig * scale)), interpolation=cv2.INTER_AREA)
 
             annotated_img, total_cars, total_buses, total_bikes, plates, _, _, _ = process_frame(
                 img, is_video=False, conf_threshold=conf, use_ollama=use_ollama
