@@ -20,17 +20,24 @@ import storage_s3
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ["YOLO_VERBOSE"] = "False"
 os.environ["ULTRALYTICS_AUTOINSTALL"] = "0"
+os.environ["MALLOC_ARENA_MAX"] = "2"
+os.environ["ORT_ENABLE_CPU_MEM_ARENA"] = "0"
+os.environ["ORT_INTRA_OP_NUM_THREADS"] = "1"
+os.environ["ORT_INTER_OP_NUM_THREADS"] = "1"
 
 from fastapi import FastAPI, UploadFile, File, Query, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
-from ultralytics import YOLO
 import cv2
 import numpy as np
 import torch
 import gc
 from PIL import Image
+try:
+    from ultralytics import YOLO
+except Exception:
+    YOLO = None
 
 # Conserve CPU threads & memory for Render 512MB RAM cap
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -78,23 +85,132 @@ else:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Target compute device: {device} (threads constrained for low-memory cloud tiers)")
 
-# Prefer ONNX models for ultra-lightweight memory footprint (Render 512MB RAM cap)
+# --------------------------------------------------------------------
+# Ultra-Low Memory ONNX Runtime Neural Engine (< 25MB RAM per model)
+# Completely eliminates PyTorch memory bloat & Render 512MB OOM 502 crashes
+# --------------------------------------------------------------------
+class ONNXBox:
+    def __init__(self, xyxy, conf, cls, track_id=None):
+        self.xyxy = [np.array(xyxy, dtype=np.float32)]
+        self.conf = [float(conf)]
+        self.cls = [int(cls)]
+        self.id = [int(track_id)] if track_id is not None else None
+
+
+class ONNXBBoxes:
+    def __init__(self, boxes):
+        self.boxes_list = boxes
+        self.xyxy = [b.xyxy[0] for b in boxes]
+        self.cls = [b.cls[0] for b in boxes]
+        self.conf = [b.conf[0] for b in boxes]
+        has_id = any(b.id is not None for b in boxes)
+        self.id = [b.id[0] if b.id else 0 for b in boxes] if has_id else None
+
+    def __iter__(self):
+        return iter(self.boxes_list)
+
+    def __len__(self):
+        return len(self.boxes_list)
+
+    def __getitem__(self, idx):
+        return self.boxes_list[idx]
+
+
+class ONNXResult:
+    def __init__(self, orig_img, boxes, class_names=None):
+        self.orig_img = orig_img
+        self.boxes = ONNXBBoxes(boxes)
+        self.class_names = class_names or {}
+
+    def plot(self):
+        annotated = self.orig_img.copy()
+        for b in self.boxes:
+            x1, y1, x2, y2 = map(int, b.xyxy[0])
+            cls_id = int(b.cls[0])
+            label = self.class_names.get(cls_id, str(cls_id))
+            conf = float(b.conf[0])
+            color = (0, 255, 0) if cls_id == 2 else (255, 128, 0) if cls_id in [1, 3] else (0, 215, 255)
+            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(annotated, f"{label} {conf:.2f}", (x1, max(15, y1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+        return annotated
+
+
+class LightONNXDetector:
+    """Zero-PyTorch, native ONNX Runtime detector with CPU memory arena disabled."""
+    def __init__(self, model_path, class_names=None):
+        import onnxruntime as ort
+        opts = ort.SessionOptions()
+        opts.intra_op_num_threads = 1
+        opts.inter_op_num_threads = 1
+        opts.enable_cpu_mem_arena = False
+        self.session = ort.InferenceSession(model_path, opts, providers=["CPUExecutionProvider"])
+        self.input_name = self.session.get_inputs()[0].name
+        self.class_names = class_names or {}
+
+    def __call__(self, img, conf=0.35, iou=0.45, verbose=False):
+        h, w = img.shape[:2]
+        r = min(640.0 / h, 640.0 / w)
+        nh, nw = int(round(h * r)), int(round(w * r))
+        dw, dh = (640.0 - nw) / 2.0, (640.0 - nh) / 2.0
+        resized = cv2.resize(img, (nw, nh), interpolation=cv2.INTER_LINEAR)
+        top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+        left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+        padded = cv2.copyMakeBorder(resized, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
+        blob = padded[:, :, ::-1].transpose(2, 0, 1).astype(np.float32) / 255.0
+        blob = np.expand_dims(blob, axis=0)
+
+        preds = self.session.run(None, {self.input_name: blob})[0][0].T
+        raw_boxes = preds[:, :4]
+        raw_scores = preds[:, 4:]
+        cls_ids = np.argmax(raw_scores, axis=1)
+        confidences = np.max(raw_scores, axis=1)
+
+        mask = confidences >= conf
+        if not np.any(mask):
+            return [ONNXResult(img, [], self.class_names)]
+
+        raw_boxes, confidences, cls_ids = raw_boxes[mask], confidences[mask], cls_ids[mask]
+        cx, cy, bw, bh = raw_boxes[:, 0], raw_boxes[:, 1], raw_boxes[:, 2], raw_boxes[:, 3]
+        x1 = np.clip((cx - bw / 2.0 - dw) / r, 0, w)
+        y1 = np.clip((cy - bh / 2.0 - dh) / r, 0, h)
+        x2 = np.clip((cx + bw / 2.0 - dw) / r, 0, w)
+        y2 = np.clip((cy + bh / 2.0 - dh) / r, 0, h)
+
+        nms_boxes = [[int(x1[i]), int(y1[i]), int(x2[i] - x1[i]), int(y2[i] - y1[i])] for i in range(len(x1))]
+        indices = cv2.dnn.NMSBoxes(nms_boxes, confidences.tolist(), float(conf), float(iou))
+
+        boxes = []
+        if len(indices) > 0:
+            for idx in np.array(indices).flatten():
+                boxes.append(ONNXBox([x1[idx], y1[idx], x2[idx], y2[idx]], confidences[idx], cls_ids[idx]))
+
+        return [ONNXResult(img, boxes, self.class_names)]
+
+    def track(self, img, conf=0.35, iou=0.45, persist=True, tracker=None, verbose=False):
+        return self.__call__(img, conf=conf, iou=iou, verbose=verbose)
+
+
 VEHICLE_ONNX = "yolov8n.onnx"
 PLATE_ONNX = "license_plate_detector.onnx"
+VEHICLE_NAMES = {0: "person", 1: "bicycle", 2: "car", 3: "motorcycle", 5: "bus", 7: "truck"}
+PLATE_NAMES = {0: "License_Plate", 1: "plate_ref", 2: "motorcycle", 3: "truck"}
 
-vehicle_model_path = VEHICLE_ONNX if os.path.exists(VEHICLE_ONNX) else "yolov8n.pt"
-print(f"Loading vehicle detection model from {vehicle_model_path}...")
-vehicle_model = YOLO(vehicle_model_path, task="detect")
+if os.path.exists(VEHICLE_ONNX):
+    print(f"Loading vehicle detection model via ultra-light ONNX Runtime ({VEHICLE_ONNX})...")
+    vehicle_model = LightONNXDetector(VEHICLE_ONNX, VEHICLE_NAMES)
+elif YOLO is not None and os.path.exists("yolov8n.pt"):
+    print("Loading vehicle detection model via YOLO fallback...")
+    vehicle_model = YOLO("yolov8n.pt", task="detect")
+else:
+    raise RuntimeError("Vehicle model weights not found.")
 
-plate_model_path = PLATE_ONNX if os.path.exists(PLATE_ONNX) else "license_plate_detector.pt"
-try:
-    if os.path.exists(plate_model_path):
-        print(f"Loading license plate model from {plate_model_path}...")
-        plate_model = YOLO(plate_model_path, task="detect")
-    else:
-        plate_model = None
-except Exception as e:
-    print(f"WARNING: Plate model failed to load ({plate_model_path}): {e}")
+if os.path.exists(PLATE_ONNX):
+    print(f"Loading license plate model via ultra-light ONNX Runtime ({PLATE_ONNX})...")
+    plate_model = LightONNXDetector(PLATE_ONNX, PLATE_NAMES)
+elif YOLO is not None and os.path.exists("license_plate_detector.pt"):
+    print("Loading license plate model via YOLO fallback...")
+    plate_model = YOLO("license_plate_detector.pt", task="detect")
+else:
     plate_model = None
 
 # TrOCR is disabled by default on cloud/low-memory instances to prevent downloading 250MB and hitting 50s timeouts

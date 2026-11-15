@@ -267,14 +267,14 @@
       try {
         const blob = await captureVideoFrameBlob();
         if (blob) {
-          await sendInferenceRequest(blob, 'live_stream_frame.jpg', false);
+          await sendInferenceRequest(blob, 'live_stream_frame.jpg', false, true);
         }
       } catch (err) {
         console.warn('Live scan cycle failed:', err);
       } finally {
         isProcessingFrame = false;
       }
-    }, 1200);
+    }, 3500);
   }
 
   function stopLiveScannerLoop() {
@@ -529,8 +529,10 @@
   // -------------------------------------------------------------
   // Send File or Blob to Backend /analyze-parking
   // -------------------------------------------------------------
-  async function sendInferenceRequest(fileOrBlob, filename, isVideo = false) {
-    showProcessingOverlay(filename, isVideo);
+  async function sendInferenceRequest(fileOrBlob, filename, isVideo = false, isSilent = false) {
+    if (!isSilent) {
+      showProcessingOverlay(filename, isVideo);
+    }
 
     const formData = new FormData();
     formData.append('file', fileOrBlob, filename);
@@ -567,12 +569,16 @@
         throw new Error(data.error || 'Server reported analysis error.');
       }
 
-      hideProcessingOverlay(true);
+      if (!isSilent) {
+        hideProcessingOverlay(true);
+      }
       renderInferenceResults(data);
       return data;
     } catch (err) {
       console.error('Inference error:', err);
-      showProcessingError(err.message);
+      if (!isSilent) {
+        showProcessingError(err.message);
+      }
       showToast(`Analysis failed: ${err.message}`, 5000);
     }
   }

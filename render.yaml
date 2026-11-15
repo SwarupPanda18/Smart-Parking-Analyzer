@@ -25,6 +25,14 @@ services:
         value: "1"
       - key: NUMEXPR_NUM_THREADS
         value: "1"
+      - key: MALLOC_ARENA_MAX
+        value: "2"
+      - key: ORT_ENABLE_CPU_MEM_ARENA
+        value: "0"
+      - key: ORT_INTRA_OP_NUM_THREADS
+        value: "1"
+      - key: ORT_INTER_OP_NUM_THREADS
+        value: "1"
       - key: DATABASE_URL
         value: postgresql://postgres.fksxkdabjoihtoebpuxq:vir%40tKohli18@aws-1-ap-south-1.pooler.supabase.com:6543/postgres
       - key: SUPABASE_S3_ENDPOINT
