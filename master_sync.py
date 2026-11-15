@@ -95,8 +95,9 @@ def compute_average_vehicle_count(window_start_naive):
             cur.execute("""
                 SELECT total_vehicles
                 FROM public.traffic_volume_ledger
-                WHERE created_at >= %s AND created_at < %s;
-            """, (w_start_utc, w_end_utc))
+                WHERE (created_at >= %s AND created_at < %s)
+                   OR (timestamp >= %s AND timestamp < %s);
+            """, (w_start_utc, w_end_utc, window_start_naive, window_end_naive))
             rows = cur.fetchall()
             counts = [r[0] for r in rows if r[0] is not None]
 
@@ -115,8 +116,12 @@ def compute_average_vehicle_count(window_start_naive):
 
 def upsert_master_window(window_start_naive, avg_count=None):
     """
-    Upserts the 5-minute interval into public.master_metrics in Master Supabase.
-    Only updates vehicle_count, preserving all other column data.
+    Upserts or updates the 5-minute interval into public.master_metrics in Master Supabase.
+    - If a row for window_start_naive already exists: updates vehicle_count.
+    - If a team member created a row within +-5 minutes: updates that team row directly!
+      (Never creates duplicate rows alongside team member models).
+    - If no row exists and avg_count > 0: inserts the new interval.
+    - If avg_count == 0 and no row exists: skips insertion to prevent empty ghost rows.
     """
     if avg_count is None:
         avg_count, _, _ = compute_average_vehicle_count(window_start_naive)
@@ -125,27 +130,71 @@ def upsert_master_window(window_start_naive, avg_count=None):
     try:
         conn = get_master_connection()
         with conn.cursor() as cur:
+            # 1. Check for exact matching window
             cur.execute("""
-                INSERT INTO public.master_metrics (
-                    window_start,
-                    vehicle_count,
-                    total_orders,
-                    hygiene_score,
-                    food_quality_score,
-                    positive_sentiment,
-                    negative_sentiment,
-                    customer_count
-                ) VALUES (
-                    %s, %s, 0, 0.0, 0.0, 0.0, 0.0, 0
-                )
-                ON CONFLICT (window_start) DO UPDATE
-                SET vehicle_count = EXCLUDED.vehicle_count;
-            """, (window_start_naive, int(avg_count)))
+                SELECT window_start, vehicle_count
+                FROM public.master_metrics
+                WHERE window_start = %s;
+            """, (window_start_naive,))
+            exact_row = cur.fetchone()
+
+            target_window = window_start_naive
+            if exact_row:
+                cur.execute("""
+                    UPDATE public.master_metrics
+                    SET vehicle_count = %s
+                    WHERE window_start = %s;
+                """, (int(avg_count), window_start_naive))
+            else:
+                # 2. Check if a team row was created within +-5 minutes
+                near_start = window_start_naive - timedelta(minutes=5)
+                near_end = window_start_naive + timedelta(minutes=5)
+                cur.execute("""
+                    SELECT window_start, vehicle_count
+                    FROM public.master_metrics
+                    WHERE window_start >= %s AND window_start <= %s
+                    ORDER BY ABS(EXTRACT(EPOCH FROM (window_start - %s))) ASC
+                    LIMIT 1;
+                """, (near_start, near_end, window_start_naive))
+                near_row = cur.fetchone()
+
+                if near_row:
+                    target_window = near_row[0]
+                    cur.execute("""
+                        UPDATE public.master_metrics
+                        SET vehicle_count = %s
+                        WHERE window_start = %s;
+                    """, (int(avg_count), target_window))
+                elif avg_count > 0:
+                    cur.execute("""
+                        INSERT INTO public.master_metrics (
+                            window_start,
+                            vehicle_count,
+                            total_orders,
+                            hygiene_score,
+                            food_quality_score,
+                            positive_sentiment,
+                            negative_sentiment,
+                            customer_count
+                        ) VALUES (
+                            %s, %s, 0, 0.0, 0.0, 0.0, 0.0, 0
+                        )
+                        ON CONFLICT (window_start) DO UPDATE
+                        SET vehicle_count = EXCLUDED.vehicle_count;
+                    """, (window_start_naive, int(avg_count)))
+                else:
+                    # avg_count == 0 and no row exists: skip inserting ghost rows
+                    return {
+                        "window_start": window_start_naive.isoformat(),
+                        "vehicle_count": 0,
+                        "status": "skipped_empty"
+                    }
+
             conn.commit()
 
-        logger.info(f"[Master Sync] Updated Master DB: window={window_start_naive.isoformat()} vehicle_count={avg_count}")
+        logger.info(f"[Master Sync] Updated Master DB: window={target_window.isoformat()} vehicle_count={avg_count}")
         return {
-            "window_start": window_start_naive.isoformat(),
+            "window_start": target_window.isoformat(),
             "vehicle_count": int(avg_count),
             "status": "synced"
         }
@@ -204,8 +253,9 @@ def sync_all_history():
     results = []
     for w_start, counts in sorted(buckets.items()):
         avg_count = int(round(sum(counts) / float(len(counts))))
-        res = upsert_master_window(w_start, avg_count)
-        results.append(res)
+        if avg_count > 0:
+            res = upsert_master_window(w_start, avg_count)
+            results.append(res)
 
     logger.info(f"[Master Sync] Completed full history sync: {len(results)} intervals processed.")
     return results
