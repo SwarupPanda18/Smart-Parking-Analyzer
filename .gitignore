@@ -78,6 +78,7 @@ weights/
 *.onnx
 !yolov8n.onnx
 !license_plate_detector.onnx
+!models/easyocr/english_g2.onnx
 *.engine
 # Ignore intermediate training checkpoints while keeping production weights
 last.pt
