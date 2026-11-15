@@ -316,23 +316,61 @@ INDIAN_STATES = {
 }
 
 STATE_PREFIX_CORRECTIONS = {
-    'W8': 'WB', 'MB': 'WB', 'VB': 'WB', 'W3': 'WB',
-    '8H': 'BH', 'B4': 'BH', '8R': 'BR',
-    'D1': 'DL', 'OL': 'DL', '0L': 'DL', 'DI': 'DL',
-    'M4': 'MH', 'M1': 'MH',
-    'K4': 'KA', 'K1': 'KA',
-    'T1': 'TN', 'TM': 'TN',
-    'U9': 'UP', 'VP': 'UP',
-    'H8': 'HR', 'H1': 'HR',
-    'G1': 'GJ', 'R1': 'RJ', 'P8': 'PB'
+    # West Bengal (WB) - OCR frequently misreads 'W' as '7', 'V', 'M', 'T', '1', 'H'
+    '7B': 'WB', 'VB': 'WB', 'V8': 'WB', 'W8': 'WB', 'MB': 'WB', 'HB': 'WB',
+    'TB': 'WB', '1B': 'WB', '78': 'WB', 'W3': 'WB', 'UB': 'WB', 'YB': 'WB',
+    'NB': 'WB', '4B': 'WB', 'VV': 'WB',
+    # Bihar (BH / BR)
+    '8H': 'BH', 'B4': 'BH', '8R': 'BR', 'B8': 'BR', '6R': 'BR', '88': 'BR',
+    # Delhi (DL)
+    'D1': 'DL', 'OL': 'DL', '0L': 'DL', 'DI': 'DL', 'QL': 'DL', 'CL': 'DL', 'OI': 'DL', '01': 'DL',
+    # Maharashtra (MH)
+    'M4': 'MH', 'M1': 'MH', 'NH': 'MH', '1H': 'MH', 'MN': 'MH',
+    # Karnataka (KA)
+    'K4': 'KA', 'K1': 'KA', 'XA': 'KA', 'RA': 'KA',
+    # Tamil Nadu (TN)
+    'T1': 'TN', 'TM': 'TN', 'IN': 'TN', '1N': 'TN',
+    # Uttar Pradesh (UP)
+    'U9': 'UP', 'VP': 'UP', '0P': 'UP', 'OP': 'UP', 'U8': 'UP', 'UF': 'UP', '1P': 'UP', 'JP': 'UP',
+    # Haryana (HR)
+    'H8': 'HR', 'H1': 'HR', 'HA': 'HR', '1R': 'HR',
+    # Gujarat (GJ)
+    'G1': 'GJ', 'GI': 'GJ', '6J': 'GJ', 'QJ': 'GJ',
+    # Rajasthan (RJ)
+    'R1': 'RJ', 'RI': 'RJ', 'PJ': 'RJ',
+    # Punjab (PB)
+    'P8': 'PB', 'P1': 'PB', 'PS': 'PB',
+    # Odisha (OD / OR)
+    '0D': 'OD', 'QD': 'OD', 'CD': 'OD', '0R': 'OD', 'OR': 'OD',
+    # Telangana (TS)
+    'T5': 'TS', '1S': 'TS',
+    # Andhra Pradesh (AP)
+    '4P': 'AP', 'A9': 'AP',
+    # Jharkhand (JH)
+    'J8': 'JH', 'J1': 'JH',
+    # Chandigarh (CH)
+    'C8': 'CH', 'C1': 'CH',
+    # Madhya Pradesh (MP)
+    'M9': 'MP',
+    # Assam (AS)
+    'A5': 'AS', '4S': 'AS'
+}
+
+DIGIT_TO_LETTER = {
+    '0': 'O', '1': 'I', '2': 'Z', '3': 'B', '4': 'A', '5': 'S', '6': 'G', '7': 'T', '8': 'B'
+}
+
+LETTER_TO_DIGIT = {
+    'O': '0', 'D': '0', 'Q': '0', 'I': '1', 'L': '1', 'Z': '2', 'A': '4',
+    'S': '5', 'G': '6', 'b': '6', 'T': '7', 'J': '7', 'B': '8', 'g': '9', 'q': '9'
 }
 
 
 def parse_and_validate_plate(raw_text):
     """
     Faithfully normalizes raw OCR output, identifies Indian State jurisdiction,
-    and returns clean registration text without destructive character mutations.
-    Preserves authentic digits and characters read by neural OCR.
+    and repairs character confusion using syntax-aware positional constraints.
+    Returns: (normalized_text, state_code, state_name, is_valid_state)
     """
     if not raw_text:
         return None
@@ -344,8 +382,14 @@ def parse_and_validate_plate(raw_text):
         if clean.startswith(pfx) and len(clean) > 5:
             clean = clean[len(pfx):]
             break
+
+    # Strip single leading boundary noise character (e.g. '1WB...', 'IWB...', '|WB...')
+    if len(clean) >= 11 and clean[0] in ['1', 'I', 'L', 'O', '0', 'D', 'T']:
+        pfx1 = clean[1:3]
+        if pfx1 in INDIAN_STATES or STATE_PREFIX_CORRECTIONS.get(pfx1) in INDIAN_STATES:
+            clean = clean[1:]
             
-    # Valid registrations are typically between 4 and 12 characters
+    # Valid registrations are typically between 4 and 13 characters
     if len(clean) < 4 or len(clean) > 13:
         return None
         
@@ -359,10 +403,48 @@ def parse_and_validate_plate(raw_text):
     corrected_prefix = STATE_PREFIX_CORRECTIONS.get(prefix, prefix)
     
     if corrected_prefix in INDIAN_STATES:
-        normalized = corrected_prefix + clean[2:]
+        rest = clean[2:]
+        
+        # Standard Format 1: 10 chars total (2 state + 2 RTO + 2 series + 4 num) e.g. WB20BN3364
+        if len(rest) == 8:
+            rto = "".join(LETTER_TO_DIGIT.get(c, c) for c in rest[:2])
+            series = "".join(DIGIT_TO_LETTER.get(c, c) for c in rest[2:4])
+            num = "".join(LETTER_TO_DIGIT.get(c, c) for c in rest[4:])
+            if rto.isdigit() and num.isdigit() and series.isalpha():
+                normalized = f"{corrected_prefix}{rto}{series}{num}"
+                return normalized, corrected_prefix, INDIAN_STATES[corrected_prefix], True
+                
+        # Standard Format 2: 9 chars total (2 state + 2 RTO + 1 series + 4 num) e.g. WB20B3364
+        elif len(rest) == 7:
+            rto = "".join(LETTER_TO_DIGIT.get(c, c) for c in rest[:2])
+            series = "".join(DIGIT_TO_LETTER.get(c, c) for c in rest[2:3])
+            num = "".join(LETTER_TO_DIGIT.get(c, c) for c in rest[3:])
+            if rto.isdigit() and num.isdigit() and series.isalpha():
+                normalized = f"{corrected_prefix}{rto}{series}{num}"
+                return normalized, corrected_prefix, INDIAN_STATES[corrected_prefix], True
+
+        # Standard Format 3: 11 chars total (2 state + 2 RTO + 3 series + 4 num) e.g. DL01CAB1234
+        elif len(rest) == 9:
+            rto = "".join(LETTER_TO_DIGIT.get(c, c) for c in rest[:2])
+            series = "".join(DIGIT_TO_LETTER.get(c, c) for c in rest[2:5])
+            num = "".join(LETTER_TO_DIGIT.get(c, c) for c in rest[5:])
+            if rto.isdigit() and num.isdigit() and series.isalpha():
+                normalized = f"{corrected_prefix}{rto}{series}{num}"
+                return normalized, corrected_prefix, INDIAN_STATES[corrected_prefix], True
+
+        # Standard Format 4: 8 chars (vintage e.g. WB203364)
+        elif len(rest) == 6:
+            rto = "".join(LETTER_TO_DIGIT.get(c, c) for c in rest[:2])
+            num = "".join(LETTER_TO_DIGIT.get(c, c) for c in rest[2:])
+            if rto.isdigit() and num.isdigit():
+                normalized = f"{corrected_prefix}{rto}{num}"
+                return normalized, corrected_prefix, INDIAN_STATES[corrected_prefix], True
+
+        # Fallback with corrected prefix preserved
+        normalized = corrected_prefix + rest
         return normalized, corrected_prefix, INDIAN_STATES[corrected_prefix], True
 
-    # Standard alphanumeric registration (e.g. B 2419 BBG or non-standard format)
+    # Standard alphanumeric registration (non-standard or international format)
     return clean, prefix, "Standard Registration", False
 
 
@@ -505,7 +587,8 @@ def ocr_with_easyocr(crop_img):
     """
     Ultra-fast, zero-overhead neural OCR for license plate text extraction.
     Prioritizes pure ONNX Runtime engine (< 15MB RAM, ~12ms execution time)
-    to keep total container memory below 150MB and prevent any 502 crashes.
+    with multi-pass preprocessing (CLAHE, Otsu binarization, cubic scaling)
+    to guarantee high accuracy in noisy, dark, or motion-blurred surveillance footage.
     """
     if crop_img is None or crop_img.size == 0:
         return []
@@ -521,26 +604,51 @@ def ocr_with_easyocr(crop_img):
             gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY) if len(crop_img.shape) == 3 else crop_img
             candidates = []
 
-            # 1. Full plate crop inference
-            full_text = ocr_single_slice_onnx(onnx_session, onnx_chars, gray)
-            if full_text:
-                candidates.append(full_text)
-                cl = "".join(c for c in full_text if c.isalnum()).upper()
-                if cl:
-                    candidates.append(cl)
+            # Multi-pass slices for OCR:
+            # 1. Standard grayscale
+            # 2. CLAHE (illuminates low-contrast plates)
+            # 3. Otsu binarization (eliminates reflections & background sensor noise)
+            # 4. Bicubic 2x upscale with unsharp mask if low-res (h < 56)
+            slices = [gray]
 
-            # 2. Multi-line slice (for square bike plates with aspect ratio < 2.5)
-            if w / max(1, h) < 2.5:
-                split = h // 2
-                top_txt = ocr_single_slice_onnx(onnx_session, onnx_chars, gray[:split, :])
-                bot_txt = ocr_single_slice_onnx(onnx_session, onnx_chars, gray[split:, :])
-                if top_txt and bot_txt:
-                    comb = f"{top_txt} {bot_txt}"
-                    candidates.append(comb)
-                    candidates.append("".join(c for c in comb if c.isalnum()).upper())
-                elif bot_txt:
-                    candidates.append(bot_txt)
-                    candidates.append("".join(c for c in bot_txt if c.isalnum()).upper())
+            clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(6, 6))
+            slices.append(clahe.apply(gray))
+
+            _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            slices.append(otsu)
+
+            if h < 56:
+                scale = 56.0 / float(h)
+                up_w = max(32, int(w * scale))
+                up = cv2.resize(gray, (up_w, 56), interpolation=cv2.INTER_CUBIC)
+                blur = cv2.GaussianBlur(up, (3, 3), 0)
+                sharp = cv2.addWeighted(up, 1.35, blur, -0.35, 0)
+                slices.append(sharp)
+
+            is_multiline = (w / max(1, h)) < 1.75
+
+            for s_img in slices:
+                # Full slice inference
+                full_text = ocr_single_slice_onnx(onnx_session, onnx_chars, s_img)
+                if full_text:
+                    candidates.append(full_text)
+                    cl = "".join(c for c in full_text if c.isalnum()).upper()
+                    if cl:
+                        candidates.append(cl)
+
+                # Multi-line slice (for two-line bike plates)
+                if is_multiline:
+                    sh_curr = s_img.shape[0]
+                    split_curr = sh_curr // 2
+                    top_txt = ocr_single_slice_onnx(onnx_session, onnx_chars, s_img[:split_curr, :])
+                    bot_txt = ocr_single_slice_onnx(onnx_session, onnx_chars, s_img[split_curr:, :])
+                    if top_txt and bot_txt:
+                        comb = f"{top_txt} {bot_txt}"
+                        candidates.append(comb)
+                        candidates.append("".join(c for c in comb if c.isalnum()).upper())
+                    elif bot_txt:
+                        candidates.append(bot_txt)
+                        candidates.append("".join(c for c in bot_txt if c.isalnum()).upper())
 
             # Return unique preserved candidates
             return list(dict.fromkeys(candidates))
@@ -591,6 +699,30 @@ def ocr_with_easyocr(crop_img):
     except Exception as e:
         print(f"OCR warning: {e}")
         return []
+
+
+def score_plate_candidate(parsed_tuple):
+    """Evaluates the confidence and format compliance of a candidate plate read."""
+    if not parsed_tuple:
+        return -999.0
+    text, code, name, is_valid = parsed_tuple
+    length = len(text)
+    is_standard_rto = bool(
+        re.match(r"^[A-Z]{2}\d{2}[A-Z]{1,3}\d{4}$", text) or
+        re.match(r"^(\d{2})BH(\d{4})([A-Z]{1,2})$", text)
+    )
+    sc = 0.0
+    if is_standard_rto:
+        sc += 60.0
+    if is_valid:
+        sc += 25.0
+    if 9 <= length <= 11:
+        sc += 15.0
+    elif 7 <= length <= 12:
+        sc += 5.0
+    else:
+        sc -= 10.0
+    return sc
 
 
 def check_ollama_available(timeout=0.6):
@@ -701,7 +833,7 @@ def recognize_plate_multi_layout(plate_crop, use_ollama=False):
         if cleaned is not None:
             variants.append(cleaned)
             
-    # --- PHASE 1: Primary Free Neural OCR Engine (EasyOCR) ---
+    # --- PHASE 1: Primary Free Neural OCR Engine (EasyOCR / ONNX) ---
     easy_candidates = []
     for v_img in variants:
         cands = ocr_with_easyocr(v_img)
@@ -709,30 +841,26 @@ def recognize_plate_multi_layout(plate_crop, use_ollama=False):
             if c and c not in easy_candidates:
                 easy_candidates.append(c)
                 
-        # If an EasyOCR variant identified a valid Indian state registration, return immediately
+        # If an EasyOCR variant identified a full standard Indian RTO registration, return immediately
         for c in easy_candidates:
             p = parse_and_validate_plate(c)
             if p and p[3]:  # is_valid_state == True
-                return p
+                txt = p[0]
+                if re.match(r"^[A-Z]{2}\d{2}[A-Z]{1,3}\d{4}$", txt) or re.match(r"^(\d{2})BH(\d{4})([A-Z]{1,2})$", txt):
+                    return p
 
-        # Fast-path: if original crop yielded text candidates, skip slower auxiliary passes
-        if easy_candidates:
-            break
-
-    # Select best candidate from EasyOCR
+    # Select best candidate from EasyOCR using format & state compliance score
     best_parsed = None
-    best_score = -1.0
+    best_score = -999.0
     for cand in easy_candidates:
         parsed = parse_and_validate_plate(cand)
         if parsed:
-            final_text, state_code, state_name, is_valid_state = parsed
-            length = len(final_text)
-            score = (25.0 if is_valid_state else 5.0) + (10.0 if 7 <= length <= 11 else 2.0)
-            if score > best_score:
-                best_score = score
+            sc = score_plate_candidate(parsed)
+            if sc > best_score:
+                best_score = sc
                 best_parsed = parsed
 
-    if best_parsed:
+    if best_parsed and best_score >= 10.0:
         return best_parsed
 
     # --- PHASE 2: Local Ollama Vision Fallback (100% Free & Local) ---
@@ -886,12 +1014,12 @@ def process_frame(img, is_video=False, conf_threshold=0.40, plate_conf=0.18, use
             if py1 <= 2 and h < 18:
                 continue
             
-            y_margin = int(h * 0.05)
-            x_margin_left = int(w * 0.03) 
-            x_margin_right = int(w * 0.02)
+            # Add slight outer safety margin to guarantee edge characters ('W', digits, IND strip) are not clipped
+            pad_x = max(2, int(w * 0.03))
+            pad_y = max(2, int(h * 0.04))
             
-            crop_y1, crop_y2 = max(0, py1 + y_margin), max(0, py2 - y_margin)
-            crop_x1, crop_x2 = max(0, px1 + x_margin_left), max(0, px2 - x_margin_right)
+            crop_y1, crop_y2 = max(0, py1 - pad_y), min(h_img, py2 + pad_y)
+            crop_x1, crop_x2 = max(0, px1 - pad_x), min(w_img, px2 + pad_x)
             
             if crop_y2 <= crop_y1 or crop_x2 <= crop_x1: 
                 continue
@@ -1224,15 +1352,15 @@ def analyze_parking(
             target_w = max(64, int(width * scale))
             target_h = max(64, int(height * scale))
 
-            # Adaptive frame skipping: analyze ~8-10 representative frames for cloud responsiveness
-            target_analysis_frames = 10
+            # Adaptive frame skipping: analyze ~14-16 representative frames for high-fidelity consensus
+            target_analysis_frames = 16
             if total_frames > target_analysis_frames:
-                frame_skip = max(3, total_frames // target_analysis_frames)
+                frame_skip = max(2, total_frames // target_analysis_frames)
             else:
-                frame_skip = 8
+                frame_skip = 4
 
-            max_frames_to_process = 10
-            max_total_frames = 100  # Cap reading to at most 100 frames (~3-4 sec)
+            max_frames_to_process = 16
+            max_total_frames = 150  # Cap reading to at most 150 frames (~5 sec)
 
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             out = cv2.VideoWriter(temp_out_path, fourcc, max(10, min(fps, 30)), (target_w, target_h))
@@ -1340,9 +1468,14 @@ def analyze_parking(
                     is_valid_state = items[0]["is_valid_state"]
                     length = len(txt)
 
-                    score = (freq * 5.0) + (7.0 if is_valid_state else 2.0) + (4.0 if 7 <= length <= 11 else 0.0) + (max_sharpness / 40.0)
+                    is_standard_format = bool(
+                        re.match(r"^[A-Z]{2}\d{2}[A-Z]{1,3}\d{4}$", txt) or
+                        re.match(r"^(\d{2})BH(\d{4})([A-Z]{1,2})$", txt)
+                    )
+
+                    score = (freq * 6.0) + (25.0 if is_standard_format else 0.0) + (15.0 if is_valid_state else 2.0) + (8.0 if 9 <= length <= 11 else 2.0) + (max_sharpness / 30.0)
                     if freq == 1 and not is_valid_state and length < 7:
-                        score = -5.0
+                        score = -10.0
 
                     if score > best_score:
                         best_score = score
