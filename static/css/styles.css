@@ -1,82 +1,119 @@
 :root {
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* Dark Theme (Default) */
-  --bg-app: #080d1a;
-  --bg-sidebar: #0d1527;
-  --bg-card: #121d33;
-  --bg-card-hover: #172540;
-  --bg-card-subtle: #16243d;
-  --bg-input: #0b1324;
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.16);
-  --border-accent: rgba(56, 189, 248, 0.35);
-
-  --text-main: #f1f5f9;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
-
-  --accent-primary: #38bdf8;
-  --accent-primary-hover: #0284c7;
-  --accent-primary-glow: rgba(56, 189, 248, 0.2);
-
-  --status-ok: #10b981;
-  --status-ok-bg: rgba(16, 185, 129, 0.12);
-  --status-ok-border: rgba(16, 185, 129, 0.3);
-
-  --status-warn: #f59e0b;
-  --status-warn-bg: rgba(245, 158, 11, 0.12);
-  --status-warn-border: rgba(245, 158, 11, 0.3);
-
-  --status-danger: #f43f5e;
-  --status-danger-bg: rgba(244, 63, 94, 0.14);
-  --status-danger-border: rgba(244, 63, 94, 0.4);
-
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-full: 9999px;
-
-  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 10px 30px -4px rgba(0, 0, 0, 0.7);
-
-  --header-height: 64px;
-}
-
-[data-theme="light"] {
-  --bg-app: #f1f5f9;
-  --bg-sidebar: #ffffff;
+  /* Mother's Hut Authentic Royal Maroon & Warm Cream Palette */
+  --bg-app: #fbf7ee;
+  --bg-app-rgb: 251, 247, 238;
+  --bg-sidebar: #4c0910;
+  --bg-sidebar-dark: #3a060c;
+  --bg-sidebar-glow: rgba(76, 9, 16, 0.4);
+  
   --bg-card: #ffffff;
-  --bg-card-hover: #f8fafc;
-  --bg-card-subtle: #f1f5f9;
-  --bg-input: #f8fafc;
-  --border-subtle: #e2e8f0;
-  --border-strong: #cbd5e1;
-  --border-accent: #0284c7;
+  --bg-card-subtle: #fcf9f2;
+  --bg-card-hover: #f9f2e3;
+  --bg-input: #ffffff;
+  
+  --border-subtle: #f0e6d2;
+  --border-strong: #dfcfb0;
+  --border-accent: #b8860b;
+  --border-maroon: #73131c;
+  
+  --text-main: #331014;
+  --text-heading: #411d21;
+  --text-muted: #7d6567;
+  --text-dim: #a48f91;
+  --text-on-maroon: #fbf3e4;
+  --text-on-maroon-muted: #d9b8bb;
 
-  --text-main: #0f172a;
-  --text-muted: #475569;
-  --text-dim: #94a3b8;
+  /* Gold & Warm Accent Accents */
+  --accent-gold: #c69214;
+  --accent-gold-hover: #b07f0c;
+  --accent-gold-bg: rgba(198, 146, 20, 0.12);
+  --accent-gold-border: rgba(198, 146, 20, 0.35);
 
-  --accent-primary: #0284c7;
-  --accent-primary-hover: #0369a1;
-  --accent-primary-glow: rgba(2, 132, 199, 0.15);
+  --accent-primary: #5c0f17;
+  --accent-primary-hover: #480a10;
+  --accent-primary-glow: rgba(92, 15, 23, 0.18);
 
-  --status-ok: #059669;
-  --status-ok-bg: #ecfdf5;
-  --status-ok-border: #a7f3d0;
+  --nav-active-bg: #dfa856;
+  --nav-active-text: #2d0509;
 
-  --status-warn: #d97706;
+  --status-ok: #15803d;
+  --status-ok-bg: #f0fdf4;
+  --status-ok-border: #bbf7d0;
+
+  --status-warn: #b45309;
   --status-warn-bg: #fffbeb;
   --status-warn-border: #fde68a;
 
-  --status-danger: #e11d48;
-  --status-danger-bg: #fff1f2;
-  --status-danger-border: #fecdd3;
+  --status-danger: #b91c1c;
+  --status-danger-bg: #fef2f2;
+  --status-danger-border: #fecaca;
 
-  --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.08);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  --shadow-card: 0 4px 16px rgba(76, 9, 16, 0.05), 0 1px 3px rgba(76, 9, 16, 0.04);
+  --shadow-lg: 0 12px 32px rgba(76, 9, 16, 0.08), 0 2px 6px rgba(76, 9, 16, 0.04);
+  --shadow-sidebar: 4px 0 24px rgba(45, 5, 9, 0.15);
+
+  --header-height: 80px;
+}
+
+[data-theme="dark"] {
+  --bg-app: #180508;
+  --bg-app-rgb: 24, 5, 8;
+  --bg-sidebar: #280307;
+  --bg-sidebar-dark: #1b0205;
+  --bg-sidebar-glow: rgba(198, 146, 20, 0.2);
+  
+  --bg-card: #26090d;
+  --bg-card-subtle: #2f0e13;
+  --bg-card-hover: #3d1219;
+  --bg-input: #1f0609;
+  
+  --border-subtle: #45151c;
+  --border-strong: #61212a;
+  --border-accent: #c69214;
+  --border-maroon: #851c27;
+  
+  --text-main: #fbf5ea;
+  --text-heading: #fff3db;
+  --text-muted: #c9adb0;
+  --text-dim: #8a6c6f;
+  --text-on-maroon: #fbf3e4;
+  --text-on-maroon-muted: #d9b8bb;
+
+  --accent-gold: #e2ab32;
+  --accent-gold-hover: #f1bf4b;
+  --accent-gold-bg: rgba(226, 171, 50, 0.16);
+  --accent-gold-border: rgba(226, 171, 50, 0.4);
+
+  --accent-primary: #75141f;
+  --accent-primary-hover: #8f1b27;
+  --accent-primary-glow: rgba(226, 171, 50, 0.25);
+
+  --nav-active-bg: #c69214;
+  --nav-active-text: #1a0204;
+
+  --status-ok: #22c55e;
+  --status-ok-bg: rgba(34, 197, 94, 0.15);
+  --status-ok-border: rgba(34, 197, 94, 0.35);
+
+  --status-warn: #f59e0b;
+  --status-warn-bg: rgba(245, 158, 11, 0.15);
+  --status-warn-border: rgba(245, 158, 11, 0.35);
+
+  --status-danger: #ef4444;
+  --status-danger-bg: rgba(239, 68, 68, 0.15);
+  --status-danger-border: rgba(239, 68, 68, 0.35);
+
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.6);
 }
 
 * {
@@ -97,63 +134,70 @@ body {
 }
 
 /* ==========================================================
-   TOP APPLICATION BAR
+   TOP APPLICATION BAR (Mother's Hut Restaurant Suite Header)
    ========================================================== */
 .app-header {
   height: var(--header-height);
-  background: var(--bg-sidebar);
-  border-bottom: 1px solid var(--border-subtle);
+  background: #ffffff;
+  background-image: radial-gradient(#e8d8be 1px, transparent 1px), radial-gradient(#e8d8be 1px, #ffffff 1px);
+  background-size: 24px 24px;
+  background-position: 0 0, 12px 12px;
+  border-bottom: 2px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1.5rem;
+  padding: 0 2rem;
   position: sticky;
   top: 0;
   z-index: 50;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  box-shadow: 0 2px 10px rgba(76, 9, 16, 0.04);
 }
 
 .brand-section {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 1.1rem;
 }
 
 .brand-logo-badge {
-  width: 38px;
-  height: 38px;
-  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-  border-radius: var(--radius-sm);
+  width: 52px;
+  height: 52px;
+  background: #ffffff;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
-  font-weight: 800;
-  font-size: 1.15rem;
-  letter-spacing: -0.02em;
-  box-shadow: 0 2px 8px var(--accent-primary-glow);
+  padding: 4px;
+  box-shadow: 0 2px 8px rgba(76, 9, 16, 0.08);
+  overflow: hidden;
+}
+
+.brand-logo-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .brand-text h1 {
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--text-main);
-  line-height: 1.2;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #411d21;
+  line-height: 1.15;
 }
 
 .brand-text .brand-subtitle {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+  color: #8c7174;
+  font-style: italic;
   font-weight: 500;
 }
 
 .header-telemetry {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
 .telemetry-chip {
@@ -161,11 +205,11 @@ body {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.78rem;
-  color: var(--text-muted);
-  background: var(--bg-input);
-  padding: 0.35rem 0.75rem;
+  color: #5c3c40;
+  background: #fbf7ee;
+  padding: 0.45rem 0.9rem;
   border-radius: var(--radius-full);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-strong);
 }
 
 .telemetry-chip .pulse-dot {
@@ -252,7 +296,7 @@ body {
 }
 
 /* ==========================================================
-   SHARED CARD & PANEL STYLES
+   SHARED CARD & PANEL STYLES (Mother's Hut Restaurant Architecture)
    ========================================================== */
 .panel {
   display: flex;
@@ -263,37 +307,51 @@ body {
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
-  padding: 1.15rem;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 20px rgba(76, 9, 16, 0.05);
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
-  transition: border-color 0.2s ease;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(to bottom, #c69214, #5c0f17);
+  opacity: 0.85;
 }
 
 .card:hover {
   border-color: var(--border-strong);
+  box-shadow: 0 8px 24px rgba(76, 9, 16, 0.08);
 }
 
 .card-title {
-  font-size: 0.84rem;
+  font-size: 0.86rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  color: #411d21;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.9rem;
+  margin-bottom: 1rem;
 }
 
 .card-title .badge {
-  font-size: 0.7rem;
-  padding: 0.15rem 0.5rem;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.6rem;
   border-radius: var(--radius-full);
-  background: var(--bg-card-subtle);
-  color: var(--accent-primary);
-  border: 1px solid var(--border-subtle);
+  background: #fbf7ee;
+  color: #5c0f17;
+  border: 1px solid var(--border-strong);
+  font-weight: 700;
   font-family: var(--font-mono);
 }
 
@@ -614,25 +672,51 @@ body {
   cursor: pointer;
 }
 
-/* Process Button */
+/* Process Button - Mother's Hut Royal Maroon Pill */
 .btn-primary {
-  background: var(--accent-primary);
-  color: #0b1324;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 0.75rem 1rem;
-  font-size: 0.86rem;
+  background: #5c0f17;
+  color: #fbf3e4;
+  border: 1px solid #73131c;
+  border-radius: var(--radius-full);
+  padding: 0.85rem 1.4rem;
+  font-size: 0.88rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   margin-top: 1rem;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px var(--accent-primary-glow);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 14px rgba(76, 9, 16, 0.25);
+}
+
+.btn-primary:hover {
+  background: #47080f;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(76, 9, 16, 0.35);
+}
+
+.btn-secondary {
+  background: #ffffff;
+  color: #411d21;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  padding: 0.6rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary:hover {
+  background: #fbf7ee;
+  border-color: #c69214;
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -743,6 +827,7 @@ body {
   justify-content: center;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 2px 12px rgba(76, 9, 16, 0.04);
 }
 
 .stat-card::before {
@@ -750,20 +835,22 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  width: 3px;
+  width: 4px;
   height: 100%;
   background: var(--border-strong);
 }
 
-.stat-card.accent-sky::before { background: var(--accent-primary); }
-.stat-card.accent-emerald::before { background: var(--status-ok); }
-.stat-card.accent-amber::before { background: var(--status-warn); }
-.stat-card.accent-rose::before { background: var(--status-danger); }
+.stat-card.accent-sky::before { background: #5c0f17; }
+.stat-card.accent-emerald::before { background: #15803d; }
+.stat-card.accent-amber::before { background: #c69214; }
+.stat-card.accent-rose::before { background: #b91c1c; }
 
 .stat-value {
   font-size: 2.1rem;
-  font-weight: 700;
+  font-weight: 800;
   font-family: var(--font-mono);
+  color: #411d21;
+}
   color: var(--text-main);
   line-height: 1.1;
 }
@@ -1343,18 +1430,26 @@ body {
 }
 
 /* ==========================================================
-   SYSTEM AUDIT DRAWER (FOOTER)
+   SYSTEM AUDIT DRAWER (FOOTER - Mother's Hut Warm Signature)
    ========================================================== */
 .audit-drawer {
-  background: var(--bg-sidebar);
-  border-top: 1px solid var(--border-subtle);
-  padding: 0.6rem 1.5rem;
-  font-size: 0.74rem;
-  color: var(--text-dim);
+  background: #ffffff;
+  border-top: 2px solid var(--border-subtle);
+  padding: 0.75rem 2rem;
+  font-size: 0.75rem;
+  color: #7d6567;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
+}
+
+.audit-drawer::after {
+  content: 'SMART SOLUTIONS • BETTER RESTAURANT EXPERIENCE';
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: #c69214;
 }
 
 .audit-log-line {

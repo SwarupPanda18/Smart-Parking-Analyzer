@@ -4,40 +4,44 @@
    ========================================================================== */
 
 :root {
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* Dark Theme (Default) */
-  --bg-app: #080d1a;
-  --bg-header: #0d1527;
-  --bg-nav: #0c1427;
-  --bg-card: #121d33;
-  --bg-card-hover: #172540;
-  --bg-card-subtle: #16243d;
-  --bg-input: #0b1324;
-  --border-subtle: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.18);
-  --border-accent: rgba(56, 189, 248, 0.4);
+  /* Mother's Hut Authentic Royal Maroon & Warm Cream Palette */
+  --bg-app: #fbf7ee;
+  --bg-header: #4c0910;
+  --bg-nav: #4c0910;
+  --bg-card: #ffffff;
+  --bg-card-hover: #fcf9f2;
+  --bg-card-subtle: #f9f2e3;
+  --bg-input: #ffffff;
+  --border-subtle: #f0e6d2;
+  --border-strong: #dfcfb0;
+  --border-accent: #c69214;
 
-  --text-main: #f1f5f9;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
+  --text-main: #331014;
+  --text-muted: #7d6567;
+  --text-dim: #a48f91;
 
-  --accent-primary: #38bdf8;
-  --accent-primary-hover: #0284c7;
-  --accent-glow: rgba(56, 189, 248, 0.25);
+  --accent-gold: #c69214;
+  --accent-primary: #5c0f17;
+  --accent-primary-hover: #480a10;
+  --accent-glow: rgba(198, 146, 20, 0.25);
 
-  --status-ok: #10b981;
-  --status-ok-bg: rgba(16, 185, 129, 0.15);
-  --status-ok-border: rgba(16, 185, 129, 0.35);
+  --nav-active-bg: #dfa856;
+  --nav-active-text: #2d0509;
 
-  --status-warn: #f59e0b;
-  --status-warn-bg: rgba(245, 158, 11, 0.15);
-  --status-warn-border: rgba(245, 158, 11, 0.35);
+  --status-ok: #15803d;
+  --status-ok-bg: #f0fdf4;
+  --status-ok-border: #bbf7d0;
 
-  --status-danger: #f43f5e;
-  --status-danger-bg: rgba(244, 63, 94, 0.16);
-  --status-danger-border: rgba(244, 63, 94, 0.45);
+  --status-warn: #b45309;
+  --status-warn-bg: #fffbeb;
+  --status-warn-border: #fde68a;
+
+  --status-danger: #b91c1c;
+  --status-danger-bg: #fef2f2;
+  --status-danger-border: #fecaca;
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -48,37 +52,41 @@
   --header-height: 58px;
 }
 
-[data-theme="light"] {
-  --bg-app: #f1f5f9;
-  --bg-header: #ffffff;
-  --bg-nav: #ffffff;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f8fafc;
-  --bg-card-subtle: #f1f5f9;
-  --bg-input: #f8fafc;
-  --border-subtle: #e2e8f0;
-  --border-strong: #cbd5e1;
-  --border-accent: #0284c7;
+[data-theme="dark"] {
+  --bg-app: #180508;
+  --bg-header: #280307;
+  --bg-nav: #280307;
+  --bg-card: #26090d;
+  --bg-card-hover: #3d1219;
+  --bg-card-subtle: #2f0e13;
+  --bg-input: #1f0609;
+  --border-subtle: #45151c;
+  --border-strong: #61212a;
+  --border-accent: #c69214;
 
-  --text-main: #0f172a;
-  --text-muted: #475569;
-  --text-dim: #94a3b8;
+  --text-main: #fbf5ea;
+  --text-muted: #c9adb0;
+  --text-dim: #8a6c6f;
 
-  --accent-primary: #0284c7;
-  --accent-primary-hover: #0369a1;
-  --accent-glow: rgba(2, 132, 199, 0.15);
+  --accent-gold: #e2ab32;
+  --accent-primary: #75141f;
+  --accent-primary-hover: #8f1b27;
+  --accent-glow: rgba(226, 171, 50, 0.25);
 
-  --status-ok: #059669;
-  --status-ok-bg: #ecfdf5;
-  --status-ok-border: #a7f3d0;
+  --nav-active-bg: #c69214;
+  --nav-active-text: #1a0204;
 
-  --status-warn: #d97706;
-  --status-warn-bg: #fffbeb;
-  --status-warn-border: #fde68a;
+  --status-ok: #22c55e;
+  --status-ok-bg: rgba(34, 197, 94, 0.15);
+  --status-ok-border: rgba(34, 197, 94, 0.35);
 
-  --status-danger: #e11d48;
-  --status-danger-bg: #fff1f2;
-  --status-danger-border: #fecdd3;
+  --status-warn: #f59e0b;
+  --status-warn-bg: rgba(245, 158, 11, 0.15);
+  --status-warn-border: rgba(245, 158, 11, 0.35);
+
+  --status-danger: #ef4444;
+  --status-danger-bg: rgba(239, 68, 68, 0.15);
+  --status-danger-border: rgba(239, 68, 68, 0.35);
 }
 
 /* Base Mobile Setup */
