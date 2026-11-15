@@ -152,9 +152,9 @@ def record_plate(plate_text, state_code=None, state_name=None, is_valid_format=F
         return False
 
     clean_text = plate_text.strip().upper()
-    now = datetime.now()
+    now = get_ist_now()
     today_str = now.strftime("%Y-%m-%d")
-    iso_timestamp = now.isoformat()
+    iso_timestamp = now.strftime("%Y-%m-%dT%H:%M:%S.%f")
 
     conn = None
     try:
@@ -171,6 +171,8 @@ def record_plate(plate_text, state_code=None, state_name=None, is_valid_format=F
             if row:
                 try:
                     last_time = datetime.fromisoformat(row[0])
+                    if last_time.tzinfo is None:
+                        last_time = last_time.replace(tzinfo=IST)
                     if (now - last_time).total_seconds() < 25:
                         return False
                 except Exception:
@@ -181,7 +183,7 @@ def record_plate(plate_text, state_code=None, state_name=None, is_valid_format=F
                     log_date, timestamp, plate_text, state_code, state_name,
                     is_valid_format, confidence_score, vehicle_type, facility,
                     source, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 today_str,
                 iso_timestamp,
@@ -192,7 +194,8 @@ def record_plate(plate_text, state_code=None, state_name=None, is_valid_format=F
                 float(confidence_score),
                 str(vehicle_type or "vehicle")[:32],
                 "Mother's Hut Main Gate",
-                str(source)[:32]
+                str(source)[:32],
+                now
             ))
             conn.commit()
             try:
@@ -213,9 +216,9 @@ def record_traffic_volume(cars=0, buses=0, bikes=0, total=None, fps=0.0, source=
     """
     Permanently records aggregate traffic counts into PostgreSQL volume ledger.
     """
-    now = datetime.now()
+    now = get_ist_now()
     today_str = now.strftime("%Y-%m-%d")
-    iso_timestamp = now.isoformat()
+    iso_timestamp = now.strftime("%Y-%m-%dT%H:%M:%S.%f")
     if total is None:
         total = cars + buses + bikes
 
@@ -227,7 +230,7 @@ def record_traffic_volume(cars=0, buses=0, bikes=0, total=None, fps=0.0, source=
                 INSERT INTO public.traffic_volume_ledger (
                     log_date, timestamp, cars_count, buses_count, bikes_count,
                     total_vehicles, fps, source, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 today_str,
                 iso_timestamp,
@@ -236,7 +239,8 @@ def record_traffic_volume(cars=0, buses=0, bikes=0, total=None, fps=0.0, source=
                 int(bikes),
                 int(total),
                 float(round(fps, 1)),
-                str(source)[:32]
+                str(source)[:32],
+                now
             ))
             conn.commit()
             try:
@@ -401,7 +405,7 @@ def get_ledger_stats():
     Returns summary statistics from PostgreSQL: total lifetime plates,
     today's plates, total distinct dates logged, and latest recorded plate.
     """
-    today_str = date.today().strftime("%Y-%m-%d")
+    today_str = get_ist_now().strftime("%Y-%m-%d")
     conn = None
     try:
         conn = get_db_connection()

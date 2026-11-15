@@ -656,7 +656,7 @@
         if (!exists) {
           allLedgerPlates.unshift({
             ...p,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            timestamp: getISTTimeString()
           });
         }
       });
@@ -710,13 +710,21 @@
     }).join('');
   }
 
+  function getISTDateString(d = new Date()) {
+    return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  }
+
+  function getISTTimeString(d = new Date()) {
+    return d.toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour12: false });
+  }
+
   // -------------------------------------------------------------
   // CSV Export (Direct from Supabase Database)
   // -------------------------------------------------------------
   function exportCsv() {
     const dateSelect = document.getElementById('mobileDateSelect');
     const selectedDate = dateSelect ? dateSelect.value : 'today';
-    const actualParam = selectedDate === 'today' ? new Date().toISOString().slice(0, 10) : selectedDate;
+    const actualParam = selectedDate === 'today' ? getISTDateString() : selectedDate;
     
     // Direct download from persistent Supabase backend database (available even days later)
     const downloadUrl = `/api/ledger/export-csv?date=${encodeURIComponent(actualParam)}`;
@@ -736,7 +744,7 @@
       const res = await fetch('/api/ledger/dates');
       const data = await res.json();
       if (data && data.dates && data.dates.length > 0) {
-        const todayIso = new Date().toISOString().slice(0, 10);
+        const todayIso = getISTDateString();
         let opts = `<option value="today">Today (${todayIso})</option>`;
         opts += `<option value="all">All Dates</option>`;
         data.dates.forEach(d => {
@@ -751,7 +759,7 @@
 
   async function loadMobilePersistentLedger(dateVal = null) {
     try {
-      const todayIso = new Date().toISOString().slice(0, 10);
+      const todayIso = getISTDateString();
       const queryDate = (!dateVal || dateVal === "today") ? todayIso : dateVal;
       const res = await fetch(`/api/ledger/entries?date=${encodeURIComponent(queryDate)}`);
       const data = await res.json();

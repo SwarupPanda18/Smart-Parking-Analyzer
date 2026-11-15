@@ -144,15 +144,24 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   /* ==========================================================
-     1. INITIALIZATION & LIVE HEALTH TELEMETRY
+     1. INITIALIZATION & LIVE HEALTH TELEMETRY (IST TIMEZONE)
      ========================================================== */
+  function getISTDateString(d = new Date()) {
+    return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  }
+
+  function getISTTimeString(d = new Date()) {
+    return d.toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour12: false });
+  }
+
   function initClock() {
     const updateTime = () => {
       const now = new Date();
       elements.clockDisplay.textContent = now.toLocaleTimeString("en-GB", {
+        timeZone: "Asia/Kolkata",
         hour12: false,
         timeZoneName: "short",
-      });
+      }) + " (IST)";
     };
     updateTime();
     setInterval(updateTime, 1000);
@@ -196,9 +205,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function logAudit(message) {
-    const timeStr = new Date().toLocaleTimeString("en-GB", { hour12: false });
+    const timeStr = getISTTimeString();
     if (elements.auditLogTime && elements.auditLogText) {
-      elements.auditLogTime.textContent = `[${timeStr}]`;
+      elements.auditLogTime.textContent = `[${timeStr} IST]`;
       elements.auditLogText.textContent = message;
     }
   }
@@ -985,7 +994,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Store plate number, state code, and state name for search filtering
       card.dataset.plate = `${plateText} ${stateCode} ${stateName.toUpperCase()}`;
 
-      const timeLogged = new Date().toLocaleTimeString("en-GB", { hour12: false });
+      const timeLogged = plate.timestamp ? (plate.timestamp.includes("T") ? plate.timestamp.split("T")[1].slice(0, 8) : plate.timestamp) : getISTTimeString();
       const cropSrc = plate.chunk ? (plate.chunk.startsWith("http") ? plate.chunk : `data:image/jpeg;base64,${plate.chunk}`) : "";
       const isVerified = plate.is_valid_format !== false;
 
@@ -1086,7 +1095,7 @@ document.addEventListener("DOMContentLoaded", () => {
      ========================================================== */
   elements.btnExportCsv.addEventListener("click", () => {
     const selectedDate = elements.ledgerDateSelect ? elements.ledgerDateSelect.value : "today";
-    const actualDateParam = selectedDate === "today" ? new Date().toISOString().slice(0, 10) : selectedDate;
+    const actualDateParam = selectedDate === "today" ? getISTDateString() : selectedDate;
     
     // Direct download from Supabase backend database (Available even days later)
     const downloadUrl = `/api/ledger/export-csv?date=${encodeURIComponent(actualDateParam)}`;
@@ -1105,7 +1114,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await fetch("/api/ledger/dates");
       const data = await res.json();
       if (data && data.dates && data.dates.length > 0) {
-        const todayIso = new Date().toISOString().slice(0, 10);
+        const todayIso = getISTDateString();
         let opts = `<option value="today">Today (${todayIso})</option>`;
         opts += `<option value="all">All Dates (${data.dates.reduce((acc, d) => acc + d.plate_count, 0)} plates)</option>`;
         data.dates.forEach(d => {
@@ -1120,7 +1129,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function loadPersistentLedger(dateVal = null) {
     try {
-      const todayIso = new Date().toISOString().slice(0, 10);
+      const todayIso = getISTDateString();
       const queryDate = (!dateVal || dateVal === "today") ? todayIso : dateVal;
       const url = `/api/ledger/entries?date=${encodeURIComponent(queryDate)}`;
       const res = await fetch(url);

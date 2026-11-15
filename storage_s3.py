@@ -9,12 +9,19 @@ Directly stores and serves all media captures, annotated images, videos, and pla
 import os
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+import zoneinfo
 import cv2
 from dotenv import load_dotenv
 
 load_dotenv()
 logger = logging.getLogger("storage_s3")
+
+# Indian Standard Time (IST) for S3 storage prefixes
+IST = zoneinfo.ZoneInfo("Asia/Kolkata")
+
+def get_ist_date_str():
+    return datetime.now(timezone.utc).astimezone(IST).strftime("%Y-%m-%d")
 
 # Supabase S3 Configuration
 S3_ENDPOINT = os.getenv("SUPABASE_S3_ENDPOINT", "https://fksxkdabjoihtoebpuxq.storage.supabase.co/storage/v1/s3").strip()
@@ -137,7 +144,7 @@ def upload_file(file_path: str, key: str = None, content_type: str = "video/mp4"
         return ""
 
     if not key:
-        today_str = datetime.now().strftime("%Y-%m-%d")
+        today_str = get_ist_date_str()
         ext = os.path.splitext(file_path)[1] or ".mp4"
         key = f"videos/{today_str}/{uuid.uuid4().hex[:12]}{ext}"
 
@@ -172,7 +179,7 @@ def upload_plate_crop(crop_bgr, plate_text: str = "plate") -> str:
     if not success:
         return ""
 
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = get_ist_date_str()
     clean_txt = "".join(c for c in plate_text if c.isalnum()).upper() or "PLATE"
     key = f"plates/{today_str}/{clean_txt}_{uuid.uuid4().hex[:8]}.jpg"
     return upload_bytes(buffer.tobytes(), key, content_type="image/jpeg")
@@ -190,7 +197,7 @@ def upload_annotated_image(img_bgr) -> str:
     if not success:
         return ""
 
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = get_ist_date_str()
     key = f"annotated/{today_str}/capture_{uuid.uuid4().hex[:10]}.jpg"
     return upload_bytes(buffer.tobytes(), key, content_type="image/jpeg")
 
@@ -200,7 +207,7 @@ def upload_annotated_video(video_path: str) -> str:
     Uploads an annotated surveillance video to Supabase S3.
     Returns presigned cloud streaming URL.
     """
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = get_ist_date_str()
     key = f"annotated/{today_str}/video_{uuid.uuid4().hex[:10]}.mp4"
     return upload_file(video_path, key=key, content_type="video/mp4")
 
